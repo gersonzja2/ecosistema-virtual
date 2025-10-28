@@ -6,6 +6,10 @@ import random
 SIM_WIDTH = 800
 SCREEN_HEIGHT = 700
 
+# Constantes para la reproducción
+ENERGIA_REPRODUCCION = 80 # Energía mínima para poder reproducirse
+EDAD_ADULTA = 3 # Edad mínima para poder reproducirse
+
 # --- Clases del Modelo ---
 
 class Animal(ABC):
@@ -70,6 +74,21 @@ class Animal(ABC):
             return f" -> ¡{self._nombre} ha muerto por falta de energía!"
         return ""
 
+    def reproducirse(self, ecosistema) -> str:
+        """Intenta reproducirse si tiene suficiente energía y edad. Devuelve un log."""
+        if self._esta_vivo and self._energia > ENERGIA_REPRODUCCION and self._edad > EDAD_ADULTA:
+            # Probabilidad de reproducción para no saturar el ecosistema
+            if random.random() < 0.2: # 20% de probabilidad cada día
+                self._energia -= 40 # Coste energético de la reproducción
+                
+                # Crear una cría del mismo tipo
+                tipo_animal = type(self)
+                nombre_cria = f"{tipo_animal.__name__} {getattr(tipo_animal, 'contador', 0) + 1}"
+                cria = tipo_animal(nombre_cria, self.x, self.y)
+                ecosistema.animales_nuevos.append(cria) # Añadir a una lista temporal
+                return f"¡{self._nombre} se ha reproducido! Nace {nombre_cria}."
+        return ""
+
     def __str__(self):
         estado = "Vivo" if self._esta_vivo else "Muerto"
         return f"Animal: {self._nombre}, Tipo: {self.__class__.__name__}, Edad: {self._edad}, Energía: {self._energia}, Estado: {estado}"
@@ -106,29 +125,27 @@ class Omnivoro(Animal):
         if not self._esta_vivo:
             return ""
         
-        cazar = random.choice([True, False])
-        presa_disponible = ecosistema.encontrar_presa(self) is not None
-
-        if cazar and presa_disponible:
-            presa = ecosistema.encontrar_presa(self)
-            if presa:
-                self._energia += 50
-                presa._energia = 0
-                log_muerte = presa.verificar_estado()
-                return f"{self._nombre} (Omnívoro) ha cazado y comido a {presa.nombre}." + log_muerte
+        presa = ecosistema.encontrar_presa(self) # Busca una presa una sola vez
+        intentar_cazar = random.choice([True, False]) # Decide si prefiere cazar
+        
+        if intentar_cazar and presa:
+            # Opción 1: Prefiere cazar y encuentra una presa.
+            self._energia += 50
+            presa._energia = 0
+            log_muerte = presa.verificar_estado()
+            return f"{self._nombre} (Omnívoro) ha cazado y comido a {presa.nombre}." + log_muerte
         elif ecosistema.plantas > 0:
-            # Lógica de herbívoro directamente aquí para un log más claro
+            # Opción 2: No intentó cazar (o no pudo) y hay plantas disponibles.
             ecosistema.plantas -= 1
             self._energia += 20
             return f"{self._nombre} (Omnívoro) ha comido plantas. Energía: {self._energia}"
-        elif presa_disponible: # Si no hay plantas, intenta cazar
-            presa = ecosistema.encontrar_presa(self)
-            if presa:
-                self._energia += 50
-                presa._energia = 0
-                log_muerte = presa.verificar_estado()
-                return f"{self._nombre} (Omnívoro) ha cazado y comido a {presa.nombre}." + log_muerte
-        # Si no encuentra comida
+        elif presa:
+            # Opción 3: No hay plantas, pero sí hay una presa. La caza por necesidad.
+            self._energia += 50
+            presa._energia = 0
+            log_muerte = presa.verificar_estado()
+            return f"{self._nombre} (Omnívoro) ha cazado y comido a {presa.nombre}." + log_muerte
+        # Opción 4: No encontró nada que comer.
         self._energia -= 10 # Pierde algo de energía buscando
         log = f"{self._nombre} (Omnívoro) no encontró nada que comer."
         return log + self.verificar_estado()
@@ -138,6 +155,7 @@ class Ecosistema:
     def __init__(self):
         self.animales: list[Animal] = []
         self.plantas = 100
+        self.animales_nuevos = [] # Lista para las crías nacidas en el día
 
     def encontrar_presa(self, depredador):
         presas_posibles = [
@@ -153,13 +171,18 @@ class Ecosistema:
         logs_dia.append(f"Las plantas han crecido. Total de plantas: {self.plantas}")
 
         random.shuffle(self.animales)
+        self.animales_nuevos = [] # Limpiar la lista de crías al inicio del día
+
         for animal in self.animales:
             if animal.esta_vivo:
                 logs_dia.append(animal.envejecer())
                 logs_dia.append(animal.moverse())
                 logs_dia.append(animal.comer(self))
+                logs_dia.append(animal.reproducirse(self)) # Nuevo comportamiento
         
         self.animales = [animal for animal in self.animales if animal.esta_vivo]
+        self.animales.extend(self.animales_nuevos) # Añadir las crías a la lista principal
+
         return [log for log in logs_dia if log] # Filtra logs vacíos
 
     def agregar_animal(self, tipo_animal, nombre=None):
