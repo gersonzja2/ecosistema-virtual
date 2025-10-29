@@ -39,13 +39,20 @@ La simulación se visualiza en una ventana de Pygame, que muestra a los animales
 
 ## Cómo ejecutarlo
 
-1.  Asegúrate de tener Python y Pygame instalados:
+1.  **Instalar dependencias**: Asegúrate de tener Python y Pygame instalados.
     ```
     pip install pygame
     ```
-2.  Crea una carpeta llamada `assets` en el mismo directorio del proyecto.
-3.  Dentro de `assets`, coloca tres imágenes pequeñas (ej. 15x15 píxeles) llamadas `herbivoro.png`, `carnivoro.png` y `omnivoro.png`.
-4.  Ejecuta el archivo principal:
+
+2.  **Preparar los sprites (imágenes)**:
+    *   Crea una carpeta llamada `assets` en el mismo directorio donde se encuentran los archivos `.py`.
+    *   Dentro de la carpeta `assets`, coloca tres imágenes para los animales:
+        *   `herbivoro.png`
+        *   `carnivoro.png`
+        *   `omnivoro.png`
+    *   **Consejo**: Si no tienes imágenes, la simulación funcionará igualmente, mostrando círculos de colores en lugar de sprites. El programa te avisará en la consola.
+
+3.  **Ejecutar la simulación**:
     ```
     python main.py
     ```
