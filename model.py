@@ -9,6 +9,19 @@ import random
 SIM_WIDTH = 800
 SCREEN_HEIGHT = 700
 
+# --- Constantes de Comportamiento Animal ---
+COSTE_MOVIMIENTO = 2          # Energía perdida al moverse
+AUMENTO_SED_MOVIMIENTO = 1    # Sed ganada al moverse
+VELOCIDAD_ANIMAL = 5          # Píxeles por paso de simulación
+UMBRAL_SED_BEBER = 60         # Nivel de sed para buscar agua activamente
+UMBRAL_HAMBRE_CARNIVORO = 70  # Nivel de energía para empezar a cazar
+UMBRAL_HAMBRE_OMNIVORO = 60   # Nivel de energía para buscar comida
+ENERGIA_HIERBA = 15
+ENERGIA_CAZA = 50
+ENERGIA_BAYAS = 25
+COSTE_BUSCAR_COMIDA = 10      # Energía perdida si no se encuentra comida
+PROBABILIDAD_REPRODUCCION = 0.07 # 7% de probabilidad por día
+
 # Constantes para la reproducción
 ENERGIA_REPRODUCCION = 80 # Energía mínima para poder reproducirse
 EDAD_ADULTA = 3 # Edad mínima para poder reproducirse
@@ -27,6 +40,22 @@ class Montana(Terreno):
 class Rio(Terreno):
     """Otra barrera infranqueable."""
     pass
+
+class Pradera(Terreno):
+    """Zona fértil que genera más hierba."""
+    pass
+
+class Santuario(Terreno):
+    """Zona segura donde no se puede cazar y la reproducción es más fácil."""
+    pass
+
+class Carcasa:
+    """Representa los restos de un animal muerto, una fuente de comida."""
+    def __init__(self, x, y, energia_restante=60):
+        self.x = x
+        self.y = y
+        self.energia_restante = energia_restante
+        self.dias_descomposicion = 0
 
 # --- Clases del Modelo ---
 
@@ -76,14 +105,25 @@ class Animal(ABC):
     def moverse(self, ecosistema) -> str:
         """Lógica de movimiento, búsqueda de recursos y reducción de energía."""
         if self._esta_vivo:
-            self._energia -= 5 # Reducimos menos para que la simulación dure más
-            self._sed += 5 # El movimiento da sed
+            self._energia -= COSTE_MOVIMIENTO
+            self._sed += AUMENTO_SED_MOVIMIENTO
 
             dx, dy = 0, 0
 
             # --- Lógica de movimiento inteligente ---
+            # Prioridad 0: Huir si hay un depredador cerca (para presas)
+            if isinstance(self, (Herbivoro, Omnivoro)):
+                depredador_cercano = ecosistema.encontrar_depredador_cercano(self)
+                if depredador_cercano:
+                    log_huida = "" # Inicializar por si acaso
+                    # Huir en dirección opuesta
+                    dx = self.x - depredador_cercano.x
+                    dy = self.y - depredador_cercano.y
+                    log_huida = f" {self._nombre} huye de {depredador_cercano.nombre}."
+
+
             # Prioridad 1: Beber si tiene mucha sed
-            if self._sed > 60:
+            if self._sed > UMBRAL_SED_BEBER:
                 rio_cercano = ecosistema.encontrar_rio_cercano(self.x, self.y, self.rango_vision)
                 if rio_cercano:
                     # Moverse hacia el borde del río
@@ -94,11 +134,19 @@ class Animal(ABC):
                     dx = punto_cercano[0] - self.x
                     dy = punto_cercano[1] - self.y
 
+            # Prioridad 1.5: Buscar refugio si la energía es baja
+            if dx == 0 and dy == 0 and self._energia < 40:
+                santuario_cercano = ecosistema.encontrar_santuario_cercano(self.x, self.y, self.rango_vision)
+                if santuario_cercano:
+                    dx = santuario_cercano.rect.centerx - self.x
+                    dy = santuario_cercano.rect.centery - self.y
+
             # Prioridad 2: Buscar comida si tiene hambre (lógica específica en subclases)
             if dx == 0 and dy == 0:
                 dx, dy = self._buscar_comida(ecosistema)
             
             # Si no hay un objetivo claro (agua), moverse aleatoriamente
+            # (La lógica de olfato de los depredadores anulará esto)
             if dx == 0 and dy == 0:
                 dx = random.randint(-10, 10)
                 dy = random.randint(-10, 10)
@@ -106,8 +154,8 @@ class Animal(ABC):
             # Normalizar el vector de movimiento para que la velocidad sea constante
             dist = math.sqrt(dx**2 + dy**2)
             if dist > 0:
-                dx = (dx / dist) * 7 # Velocidad de 7 píxeles por paso
-                dy = (dy / dist) * 7
+                dx = (dx / dist) * VELOCIDAD_ANIMAL
+                dy = (dy / dist) * VELOCIDAD_ANIMAL
             
             nueva_x = max(0, min(self.x + dx, SIM_WIDTH - 10))
             nueva_y = max(0, min(self.y + dy, SCREEN_HEIGHT - 10))
@@ -125,10 +173,10 @@ class Animal(ABC):
                 log_bebida = ""
 
             log = f"{self._nombre} se ha movido. Energía: {self._energia}, Sed: {self._sed}." + log_bebida
-            return log + self.verificar_estado()
+            return log + self.verificar_estado(ecosistema)
         return ""
 
-    def envejecer(self, ecosistema) -> str:
+    def envejecer(self, ecosistema: 'Ecosistema') -> str:
         """Incrementa la edad y reduce energía. Devuelve un log."""
         if self._esta_vivo:
             self._edad += 1
@@ -136,25 +184,29 @@ class Animal(ABC):
             coste_energia = ecosistema.estaciones[ecosistema.estacion_actual]['coste_energia']
             self._energia -= coste_energia
 
-            if self._sed > 80: # Si está muy sediento, pierde energía extra
-                self._energia -= 10
-
             log = f"{self._nombre} ha envejecido. E: {self._energia}, S: {self._sed}"
-            return log + self.verificar_estado()
+            return log + self.verificar_estado(ecosistema)
         return ""
 
-    def verificar_estado(self) -> str:
+    def verificar_estado(self, ecosistema: 'Ecosistema') -> str:
         """Comprueba si el animal sigue vivo. Devuelve log si muere."""
-        if self._esta_vivo and (self._energia <= 0 or self._sed >= 150):
+        if self._esta_vivo and (self._energia <= 0 or self._sed >= 150 or self._edad > 25): # Muerte por vejez
             self._esta_vivo = False
+            # Al morir, deja una carcasa
+            ecosistema.agregar_carcasa(self.x, self.y) # Corregido: 'ecosistema' ahora está definido
             return f" -> ¡{self._nombre} ha muerto!"
         return ""
 
     def reproducirse(self, ecosistema) -> str:
         """Intenta reproducirse si tiene suficiente energía y edad. Devuelve un log."""
+        probabilidad = PROBABILIDAD_REPRODUCCION
+        # Si está en un santuario, la probabilidad de reproducción aumenta
+        if ecosistema.esta_en_santuario(self.x, self.y):
+            probabilidad *= 2
+
         if self._esta_vivo and self._energia > ENERGIA_REPRODUCCION and self._edad > EDAD_ADULTA:
             # Probabilidad de reproducción para no saturar el ecosistema
-            if random.random() < 0.2: # 20% de probabilidad cada día
+            if random.random() < probabilidad:
                 self._energia -= 40 # Coste energético de la reproducción
 
                 # --- Lógica de Herencia Genética ---
@@ -180,11 +232,11 @@ class Herbivoro(Animal):
     def comer(self, ecosistema) -> str:
         if self._esta_vivo and self._energia < self.genes['max_energia'] and ecosistema.recursos['hierba'] > 0:
             ecosistema.recursos['hierba'] -= 1
-            self._energia += 15 # La hierba da menos energía
+            self._energia += ENERGIA_HIERBA
             self._energia = min(self._energia, self.genes['max_energia'])
             return f"{self._nombre} (Herbívoro) ha comido hierba. Energía: {self._energia}"
-        self._energia -= 5 # Pierde energía buscando
-        return f"{self._nombre} (Herbívoro) no encontró hierba."
+        # Si no hay hierba, simplemente no come. No hay penalización extra.
+        return f"{self._nombre} (Herbívoro) no encontró hierba para comer."
 
     def _buscar_comida(self, ecosistema):
         """Los herbívoros no buscan activamente, pastan donde están."""
@@ -196,27 +248,62 @@ class Carnivoro(Animal):
         if not self._esta_vivo:
             return ""
         
+        # Los depredadores no pueden cazar dentro de un santuario
+        if ecosistema.esta_en_santuario(self.x, self.y):
+            self._energia -= COSTE_BUSCAR_COMIDA / 2 # Pierde menos energía
+            return f"{self._nombre} está en un santuario y no puede cazar."
+
+        # Prioridad 1: Cazar presas vivas
         presa = ecosistema.encontrar_presa_cercana(self)
         if presa:
-            self._energia += 50
+            self._energia += ENERGIA_CAZA
             self._energia = min(self._energia, self.genes['max_energia'])
             presa._energia = 0 # La presa muere instantáneamente
-            log_muerte = presa.verificar_estado()
+            # La presa cazada no deja carcasa, es consumida directamente.
+            log_muerte = presa.verificar_estado(ecosistema)
             return f"{self._nombre} (Carnívoro) ha cazado y comido a {presa.nombre}." + log_muerte
-        else:
-            self._energia -= 15
-            log = f"{self._nombre} (Carnívoro) no encontró presas y perdió energía."
-            return log + self.verificar_estado()
+
+        # Prioridad 2: Buscar carroña
+        carcasa = ecosistema.comer_carcasa(self)
+        if carcasa:
+            energia_ganada = min(carcasa.energia_restante, 30) # No puede comer más de 30 de una vez
+            self._energia += energia_ganada
+            carcasa.energia_restante -= energia_ganada
+            return f"{self._nombre} (Carnívoro) ha comido carroña. Energía: {self._energia}"
+
+        # La penalización por no encontrar comida se aplica solo si no hay objetivo.
+        # Esto se gestiona ahora en _buscar_comida.
+        # Si llega aquí, significa que no tenía nada al alcance para comer en este turno.
+        return f"{self._nombre} (Carnívoro) está buscando comida."
+
 
     def _buscar_comida(self, ecosistema):
         """Busca la presa más cercana y se mueve hacia ella."""
-        if self._energia < 70: # Solo caza si tiene hambre
-            presa_cercana = ecosistema.encontrar_presa_cercana(self)
-            if presa_cercana:
-                dx = presa_cercana.x - self.x
-                dy = presa_cercana.y - self.y
-                return dx, dy
-        return 0, 0
+        # Un depredador siempre está buscando presas, no solo cuando tiene hambre.
+        presa_cercana = ecosistema.encontrar_presa_cercana(self)
+        if presa_cercana:
+            dx = presa_cercana.x - self.x
+            dy = presa_cercana.y - self.y
+            return dx, dy
+        
+        # Si no ve presas, usa el "olfato" para moverse en la dirección general de la presa más cercana
+        presa_lejana = ecosistema.encontrar_presa_mas_cercana_global(self)
+        if presa_lejana:
+            dx = presa_lejana.x - self.x
+            dy = presa_lejana.y - self.y
+            return dx, dy
+
+        # Si no hay presas en absoluto, busca carroña
+        carcasa_cercana = ecosistema.encontrar_carcasa_cercana(self.x, self.y, self.rango_vision * 2) # Olfato de carroña más amplio
+        if carcasa_cercana:
+            dx = carcasa_cercana.x - self.x
+            dy = carcasa_cercana.y - self.y
+            return dx, dy
+
+        # Si no hay absolutamente nada que comer en el mapa, se mueve aleatoriamente y pierde energía.
+        self._energia -= COSTE_BUSCAR_COMIDA
+        self.verificar_estado(ecosistema) # Comprobar si muere de hambre
+        return 0, 0 # Devuelve 0,0 para que se mueva aleatoriamente
 
 
 class Omnivoro(Animal):
@@ -225,44 +312,96 @@ class Omnivoro(Animal):
         if not self._esta_vivo:
             return ""
         
-        presa = ecosistema.encontrar_presa_cercana(self) # Busca una presa una sola vez
-        intentar_cazar = random.choice([True, False]) # Decide si prefiere cazar
-        
-        if intentar_cazar and presa:
-            # Opción 1: Prefiere cazar y encuentra una presa.
-            self._energia += 50
+        # Los depredadores no pueden cazar dentro de un santuario
+        if ecosistema.esta_en_santuario(self.x, self.y):
+            # Pero sí pueden buscar bayas si están en una selva dentro del santuario
+            return self._intentar_comer_bayas(ecosistema)
+
+        # Decisión más inteligente: ¿qué está más cerca, bayas o presas?
+        presa_cercana = ecosistema.encontrar_presa_cercana(self)
+        selva_cercana = ecosistema.encontrar_selva_cercana(self.x, self.y, self.rango_vision)
+
+        dist_presa = self._distancia_a(presa_cercana.x, presa_cercana.y) if presa_cercana else float('inf')
+        dist_selva = ecosistema._distancia_a_rect(self.x, self.y, selva_cercana.rect) if selva_cercana else float('inf')
+
+        # Opción 1: Cazar si la presa está más cerca (o no hay selvas) y hay presa.
+        if presa_cercana and dist_presa <= dist_selva:
+            self._energia += ENERGIA_CAZA
             self._energia = min(self._energia, self.genes['max_energia'])
-            presa._energia = 0
-            log_muerte = presa.verificar_estado()
-            return f"{self._nombre} (Omnívoro) ha cazado y comido a {presa.nombre}." + log_muerte
-        elif ecosistema.comer_bayas(self):
-            # Opción 2: No cazó, pero encontró y comió bayas en una selva.
-            self._energia += 25
+            presa_cercana._energia = 0
+            log_muerte = presa_cercana.verificar_estado(ecosistema)
+            return f"{self._nombre} (Omnívoro) ha cazado a {presa_cercana.nombre}." + log_muerte
+
+        # Opción 1.5: Comer carroña si está más cerca que las bayas
+        carcasa_cercana = ecosistema.encontrar_carcasa_cercana(self.x, self.y, self.rango_vision)
+        dist_carcasa = self._distancia_a(carcasa_cercana.x, carcasa_cercana.y) if carcasa_cercana else float('inf')
+
+        if carcasa_cercana and dist_carcasa < dist_selva:
+            if ecosistema.comer_carcasa(self):
+                self._energia += 20 # Ganan un poco menos que los carnívoros de la carroña
+                return f"{self._nombre} (Omnívoro) ha comido carroña. Energía: {self._energia}"
+
+        # Opción 2: Comer bayas si está en una selva.
+        return self._intentar_comer_bayas(ecosistema)
+
+    def _intentar_comer_bayas(self, ecosistema):
+        """Lógica separada para comer bayas, reutilizable."""
+        if ecosistema.comer_bayas(self):
+            self._energia += ENERGIA_BAYAS
             self._energia = min(self._energia, self.genes['max_energia'])
             return f"{self._nombre} (Omnívoro) ha comido bayas. Energía: {self._energia}"
-
-        elif presa:
-            # Opción 3: No hay plantas, pero sí hay una presa. La caza por necesidad.
-            self._energia += 50
-            self._energia = min(self._energia, self.genes['max_energia'])
-            presa._energia = 0
-            log_muerte = presa.verificar_estado()
-            return f"{self._nombre} (Omnívoro) ha cazado y comido a {presa.nombre}." + log_muerte
-        # Opción 4: No encontró nada que comer.
-        self._energia -= 10 # Pierde algo de energía buscando
-        log = f"{self._nombre} (Omnívoro) no encontró nada que comer."
-        return log + self.verificar_estado()
+        else:
+            # Si llega aquí, es porque no había bayas en la selva en la que está.
+            # La penalización real por no encontrar comida se gestiona en _buscar_comida.
+            return f"{self._nombre} (Omnívoro) buscó bayas sin éxito."
 
     def _buscar_comida(self, ecosistema):
         """Los omnívoros buscan selvas si tienen hambre."""
-        if self._energia < 60:
-            selva_cercana = ecosistema.encontrar_selva_cercana(self.x, self.y, self.rango_vision)
-            if selva_cercana:
-                dx = selva_cercana.rect.centerx - self.x
-                dy = selva_cercana.rect.centery - self.y
-                return dx, dy
+        # La lógica de búsqueda de comida ya está en comer(), aquí solo se mueve.
+        # Podríamos hacer que se mueva hacia la comida más prometedora.
+        selva_cercana = ecosistema.encontrar_selva_cercana(self.x, self.y, self.rango_vision)
+        if selva_cercana:
+            dx = selva_cercana.rect.centerx - self.x
+            dy = selva_cercana.rect.centery - self.y
+            return dx, dy
+
+        # Olfato para presas si no hay selvas cerca
+        presa_lejana = ecosistema.encontrar_presa_mas_cercana_global(self)
+        if presa_lejana:
+            dx = presa_lejana.x - self.x
+            dy = presa_lejana.y - self.y
+            return dx, dy
+
+        # Si no hay objetivos, se mueve aleatoriamente y pierde energía.
+        self._energia -= COSTE_BUSCAR_COMIDA
+        self.verificar_estado(ecosistema)
         return 0, 0
 
+# --- Clases de Animales Específicos ---
+
+class Conejo(Herbivoro):
+    """Un herbívoro específico."""
+    pass
+
+class Raton(Herbivoro):
+    """Un herbívoro específico."""
+    pass
+
+class Leopardo(Carnivoro):
+    """Un carnívoro específico."""
+    pass
+
+class Gato(Carnivoro):
+    """Un carnívoro específico."""
+    pass
+
+class Cerdo(Omnivoro):
+    """Un omnívoro específico."""
+    pass
+
+class Mono(Omnivoro):
+    """Un omnívoro específico."""
+    pass
 
 class Selva(Terreno):
     """Zona donde crecen las bayas. No es una barrera."""
@@ -278,30 +417,40 @@ class Ecosistema:
     def __init__(self):
         self.animales: list[Animal] = []
         self.recursos = {
-            "hierba": 100
+            "hierba": 100,
+            "carcasas": []
         }
         self.terreno = {
             "montanas": [
                 Montana((50, 50, 100, 150)),
                 Montana((600, 400, 150, 120))
             ],
+            "praderas": [
+                Pradera((20, 400, 150, 150)) # Nueva pradera fértil
+            ],
             "rios": [
                 Rio((0, 300, 500, 40)),
-                Rio((460, 100, 40, 240))
+                Rio((460, 100, 40, 240)),
+                Rio((650, 600, 150, 30)) # Nuevo río pequeño
             ],
             "selvas": [
-                Selva((200, 450, 250, 180))
-            ]
+                Selva((200, 450, 250, 180)),
+                Selva((20, 20, 100, 100)) # Nueva selva pequeña
+            ],
+            "santuarios": [
+                Santuario((550, 50, 200, 200)),
+                Santuario((20, 560, 180, 120)) # Nuevo santuario en la esquina
+            ],
         }
         # --- Estaciones y Clima ---
         self.dia_total = 0
         self.dias_por_estacion = 20
         self.estacion_actual = "Primavera"
         self.estaciones = {
-            "Primavera": {"crecimiento": 1.5, "coste_energia": 2},
-            "Verano":    {"crecimiento": 1.0, "coste_energia": 3},
-            "Otoño":     {"crecimiento": 0.5, "coste_energia": 4},
-            "Invierno":  {"crecimiento": 0.1, "coste_energia": 6}
+            "Primavera": {"crecimiento": 1.5, "coste_energia": 1},
+            "Verano":    {"crecimiento": 1.0, "coste_energia": 2},
+            "Otoño":     {"crecimiento": 0.5, "coste_energia": 3},
+            "Invierno":  {"crecimiento": 0.1, "coste_energia": 4}
         }
         self.clima_actual = "Normal"
 
@@ -312,12 +461,36 @@ class Ecosistema:
         presas_posibles = [
             animal for animal in self.animales 
             if isinstance(animal, (Herbivoro, Omnivoro)) and animal.esta_vivo and animal != depredador and
-            depredador._distancia_a(animal.x, animal.y) < depredador.rango_vision
+            depredador._distancia_a(animal.x, animal.y) < depredador.rango_vision and
+            not self.esta_en_santuario(animal.x, animal.y) # No se puede cazar presas en santuarios
         ]
         if not presas_posibles:
             return None
         # Devuelve la presa más cercana
         return min(presas_posibles, key=lambda p: depredador._distancia_a(p.x, p.y))
+
+    def encontrar_presa_mas_cercana_global(self, depredador):
+        """Encuentra la presa más cercana en todo el mapa (olfato)."""
+        presas_posibles = [
+            animal for animal in self.animales 
+            if isinstance(animal, (Herbivoro, Omnivoro)) and animal.esta_vivo and animal != depredador and
+            not self.esta_en_santuario(animal.x, animal.y)
+        ]
+        if not presas_posibles:
+            return None
+        return min(presas_posibles, key=lambda p: depredador._distancia_a(p.x, p.y))
+
+    def encontrar_depredador_cercano(self, presa):
+        """Encuentra el carnívoro más cercano a una presa."""
+        depredadores_cercanos = [
+            animal for animal in self.animales
+            if isinstance(animal, Carnivoro) and animal.esta_vivo and
+            presa._distancia_a(animal.x, animal.y) < presa.rango_vision
+        ]
+        if not depredadores_cercanos:
+            return None
+        # Devuelve el depredador más cercano
+        return min(depredadores_cercanos, key=lambda d: presa._distancia_a(d.x, d.y))
 
     def encontrar_rio_cercano(self, x, y, rango):
         """Encuentra el río más cercano dentro de un rango."""
@@ -340,6 +513,21 @@ class Ecosistema:
         if not selvas_cercanas:
             return None
         return min(selvas_cercanas, key=lambda s: self._distancia_a_rect(x, y, s.rect))
+
+    def encontrar_santuario_cercano(self, x, y, rango):
+        """Encuentra el santuario más cercano dentro de un rango."""
+        santuarios_cercanos = [s for s in self.terreno["santuarios"] if self._distancia_a_rect(x, y, s.rect) < rango]
+        if not santuarios_cercanos:
+            return None
+        return min(santuarios_cercanos, key=lambda s: self._distancia_a_rect(x, y, s.rect))
+
+    def encontrar_carcasa_cercana(self, x, y, rango):
+        """Encuentra la carcasa más cercana dentro de un rango."""
+        carcasas_cercanas = [c for c in self.recursos["carcasas"] if self._distancia_a_rect(x, y, pygame.Rect(c.x, c.y, 1, 1)) < rango]
+        if not carcasas_cercanas:
+            return None
+        return min(carcasas_cercanas, key=lambda c: self._distancia_a_rect(x, y, pygame.Rect(c.x, c.y, 1, 1)))
+
 
     def _distancia_a_rect(self, x, y, rect):
         """Calcula la distancia desde un punto al centro de un rectángulo."""
@@ -365,6 +553,13 @@ class Ecosistema:
                 return True
         return False
 
+    def esta_en_santuario(self, x, y):
+        """Comprueba si una posición está dentro de un santuario."""
+        for santuario in self.terreno["santuarios"]:
+            if santuario.rect.collidepoint(x, y):
+                return True
+        return False
+
     def comer_bayas(self, animal):
         """Permite a un animal comer bayas si está en una selva con bayas."""
         for selva in self.terreno["selvas"]:
@@ -372,6 +567,20 @@ class Ecosistema:
                 selva.bayas -= 1
                 return True
         return False
+
+    def comer_carcasa(self, animal):
+        """Permite a un animal comer de una carcasa si está cerca."""
+        for carcasa in self.recursos["carcasas"]:
+            if animal._distancia_a(carcasa.x, carcasa.y) < 20 and carcasa.energia_restante > 0:
+                return carcasa
+        return None
+
+    def agregar_carcasa(self, x, y):
+        """Añade una nueva carcasa al ecosistema."""
+        # No dejar carcasas dentro de los ríos o montañas
+        if not self.choca_con_terreno(x, y):
+            nueva_carcasa = Carcasa(x, y)
+            self.recursos["carcasas"].append(nueva_carcasa)
 
     def _actualizar_estacion(self):
         """Actualiza la estación del año."""
@@ -395,13 +604,25 @@ class Ecosistema:
             factor_crecimiento *= 0.1 # La sequía reduce drásticamente el crecimiento
             logs_dia.append("¡Una sequía azota la región!")
 
-        self.recursos["hierba"] += int(15 * factor_crecimiento)
+        # Crecimiento base de hierba + bonus por praderas
+        self.recursos["hierba"] += int(10 * factor_crecimiento)
+        for pradera in self.terreno["praderas"]:
+            self.recursos["hierba"] += int(10 * factor_crecimiento) # Bonus de la pradera
+
         for selva in self.terreno["selvas"]:
             selva.crecer_recursos(factor_crecimiento)
         
+        # Descomposición de carcasas
+        for carcasa in self.recursos["carcasas"]:
+            carcasa.dias_descomposicion += 1
+            carcasa.energia_restante -= 5 # Pierde 5 de energía cada día
+        self.recursos["carcasas"] = [c for c in self.recursos["carcasas"] if c.energia_restante > 0 and c.dias_descomposicion < 5]
+
+
         logs_dia.append(f"Estación: {self.estacion_actual}. Clima: {self.clima_actual}.")
         bayas_totales = sum(s.bayas for s in self.terreno["selvas"])
-        logs_dia.append(f"Recursos: {self.recursos['hierba']} hierba, {bayas_totales} bayas.")
+        carcasas_activas = len(self.recursos['carcasas'])
+        logs_dia.append(f"Recursos: {self.recursos['hierba']} hierba, {bayas_totales} bayas, {carcasas_activas} carcasas.")
 
 
         random.shuffle(self.animales)
@@ -425,8 +646,12 @@ class Ecosistema:
         if nombre is None:
             nombre = f"{tipo_animal.__name__} {getattr(tipo_animal, 'contador', 0) + 1}"
 
-        x = random.randint(20, SIM_WIDTH - 20)
-        y = random.randint(20, SCREEN_HEIGHT - 20)
+        # Asegurarse de que el animal no aparezca en una barrera
+        while True:
+            x = random.randint(20, SIM_WIDTH - 20)
+            y = random.randint(20, SCREEN_HEIGHT - 20)
+            if not self.choca_con_terreno(x, y):
+                break
         nuevo_animal = tipo_animal(nombre, x, y)
         self.animales.append(nuevo_animal)
 
@@ -459,9 +684,11 @@ class Ecosistema:
             self.terreno["selvas"][i].bayas = s_data["bayas"]
 
         self.animales = []
-        tipos = {"Herbivoro": Herbivoro, "Carnivoro": Carnivoro, "Omnivoro": Omnivoro}
+        tipos = {"Herbivoro": Herbivoro, "Carnivoro": Carnivoro, "Omnivoro": Omnivoro, "Conejo": Conejo, "Raton": Raton, "Leopardo": Leopardo, "Gato": Gato, "Cerdo": Cerdo, "Mono": Mono}
         for a_data in estado["animales"]:
-            tipo_clase = tipos[a_data["tipo"]]
-            animal = tipo_clase(a_data["nombre"], a_data["x"], a_data["y"], a_data["edad"], a_data["energia"], genes=a_data["genes"])
-            animal._sed = a_data["sed"]
-            self.animales.append(animal)
+            tipo_clase = tipos.get(a_data["tipo"])
+            if tipo_clase:
+                animal = tipo_clase(a_data["nombre"], a_data["x"], a_data["y"], a_data["edad"], a_data["energia"], genes=a_data.get("genes"))
+                # Restaurar sed si está en los datos guardados
+                animal._sed = a_data.get("sed", 0)
+                self.animales.append(animal)
