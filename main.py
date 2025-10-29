@@ -4,7 +4,12 @@ import random
 from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Animal
 from graph import PopulationGraph
 
-
+# --- Constantes para Pygame ---
+# Las constantes de la simulación (SIM_WIDTH, etc.) están ahora en model.py
+SCREEN_WIDTH = 1200
+SCREEN_HEIGHT = 700
+SIM_WIDTH = 800 # Área de la simulación
+UI_WIDTH = 400  # Área para la interfaz de texto
 
 COLOR_BACKGROUND = (22, 160, 133)
 COLOR_SIM_AREA = (46, 204, 113)
@@ -13,12 +18,12 @@ COLOR_CARNIVORO = (231, 76, 60)   # Rojo
 COLOR_OMNIVORO = (52, 152, 219)  # Azul
 COLOR_TEXT = (236, 240, 241)
 COLOR_MONTANA = (149, 165, 166) # Gris
-COLOR_RIO = (41, 128, 185)     # Azul oscwadwduro
+COLOR_RIO = (41, 128, 185)     # Azul oscuro
 COLOR_SELVA = (39, 174, 96)     # Verde oscuro
 COLOR_BUTTON = (26, 188, 156)
 
 # --- Clase para Botones ---
-sorted
+
 class Button:
     """Clase para crear botones clickeables en Pygame."""
     def __init__(self, x, y, width, height, text, color, text_color):
@@ -28,8 +33,8 @@ class Button:
         self.text_color = text_color
         self.font = pygame.font.SysFont("helvetica", 20)
 
-    def draw(self, surfac):
-        pygame.draw.rect(urface, self.color, self.rect, border_radius=8)
+    def draw(self, surface):
+        pygame.draw.rect(surface, self.color, self.rect, border_radius=8)
         text_surf = self.font.render(self.text, True, self.text_color)
         text_rect = text_surf.get_rect(center=self.rect.center)
         surface.blit(text_surf, text_rect)
