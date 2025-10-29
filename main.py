@@ -44,15 +44,35 @@ class Button:
 class PygameView:
     """Se encarga de mostrar la simulación en una ventana con Pygame."""
     def __init__(self):
+        # Inicializar Pygame y el mezclador de audio
         pygame.init()
+        try:
+            # Inicializar el mixer por separado para mayor control (es seguro si ya está inicializado)
+            pygame.mixer.init()
+        except Exception:
+            # Si falla, seguimos sin audio (por ejemplo en entornos sin dispositivo de audio)
+            print("Aviso: no se pudo inicializar pygame.mixer; la música de fondo no estará disponible.")
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         pygame.display.set_caption("Simulador de Ecosistema Virtual")
         self.font_header = pygame.font.SysFont("helvetica", 24, bold=True)
         self.font_normal = pygame.font.SysFont("consola", 16)
         self.font_small = pygame.font.SysFont("consola", 14)
         self.font_tiny = pygame.font.SysFont("consola", 12)
-        self.buttons = self._create_buttons()
+        # Cargar sprites primero
         self.sprites = self._load_sprites()
+        # Intentar cargar y reproducir la música de fondo
+        self.music_playing = False
+        try:
+            music_path = "assets/musica_fondo_0.mp3"
+            pygame.mixer.music.load(music_path)
+            pygame.mixer.music.set_volume(0.15)  # Volumen por defecto (0.0 - 1.0)
+            pygame.mixer.music.play(-1)  # Repetir indefinidamente
+            self.music_playing = True
+        except Exception as e:
+            # No abortamos la ejecución si falla la música
+            print(f"No se pudo cargar/reproducir la música de fondo: {e}")
+        # Crear botones después de conocer el estado de la música para mostrar el texto correcto
+        self.buttons = self._create_buttons()
         self.graph = PopulationGraph(SIM_WIDTH + 10, SCREEN_HEIGHT - 350, UI_WIDTH - 20, 120, self.font_small)
 
     def _load_sprites(self):
@@ -78,6 +98,9 @@ class PygameView:
         buttons["add_omni"] = Button(btn_x, SCREEN_HEIGHT - 85, btn_width, btn_height, "Añadir Omnívoro", COLOR_OMNIVORO, COLOR_TEXT)
         buttons["save"] = Button(SIM_WIDTH + 10, SCREEN_HEIGHT - 40, 85, 30, "Guardar", (0, 100, 0), COLOR_TEXT)
         buttons["load"] = Button(SIM_WIDTH + 105, SCREEN_HEIGHT - 40, 85, 30, "Cargar", (100, 100, 0), COLOR_TEXT)
+        # Botón para controlar música (ON/OFF)
+        music_text = "Música: ON" if getattr(self, 'music_playing', False) else "Música: OFF"
+        buttons["music"] = Button(SIM_WIDTH + 200, SCREEN_HEIGHT - 40, 85, 30, music_text, (80, 80, 80), COLOR_TEXT)
         return buttons
 
     def _draw_text(self, text, font, color, surface, x, y):
@@ -172,7 +195,43 @@ class PygameView:
         pygame.display.flip()
 
     def close(self):
+        # Detener música si está sonando
+        try:
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()
+        except Exception:
+            pass
         pygame.quit()
+
+    def toggle_music(self):
+        """Alterna la reproducción de la música de fondo ON/OFF.
+
+        Actualiza también el texto del botón `music`.
+        """
+        try:
+            if not pygame.mixer.get_init():
+                print("Mixer no inicializado; no se puede controlar la música.")
+                return
+            if self.music_playing and pygame.mixer.music.get_busy():
+                pygame.mixer.music.pause()
+                self.music_playing = False
+                if "music" in self.buttons:
+                    self.buttons["music"].text = "Música: OFF"
+            else:
+                # Si no está sonando, intentamos reanudar; si falla, intentamos play desde el inicio
+                try:
+                    pygame.mixer.music.unpause()
+                except Exception:
+                    try:
+                        pygame.mixer.music.play(-1)
+                    except Exception as e:
+                        print(f"No se pudo reproducir la música: {e}")
+                        return
+                self.music_playing = True
+                if "music" in self.buttons:
+                    self.buttons["music"].text = "Música: ON"
+        except Exception as e:
+            print(f"Error al alternar música: {e}")
 
 class SimulationController:
     """Controla el flujo de la simulación, conectando el Modelo y la Vista."""
@@ -223,6 +282,12 @@ class SimulationController:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         running = False
+                    elif event.key == pygame.K_m:
+                        # Atajo de teclado: tecla M para alternar música
+                        try:
+                            self.view.toggle_music()
+                        except Exception as e:
+                            print(f"Error al alternar música desde teclado: {e}")
                 if event.type == pygame.MOUSEBUTTONDOWN and not sim_over:
                     pos = pygame.mouse.get_pos()
                     if self.view.buttons["next_day"].rect.collidepoint(pos):
@@ -245,6 +310,12 @@ class SimulationController:
                             self.logs.append("¡Partida cargada!")
                         except FileNotFoundError:
                             self.logs.append("¡No se encontró guardado!")
+                    elif self.view.buttons["music"].rect.collidepoint(pos):
+                        # Alternar la música de fondo
+                        try:
+                            self.view.toggle_music()
+                        except Exception as e:
+                            print(f"Error al alternar música desde controlador: {e}")
                     else:
                         # Comprobar si se hizo clic en un animal
                         self.animal_seleccionado = None
