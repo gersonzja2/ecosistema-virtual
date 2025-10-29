@@ -64,6 +64,14 @@ class PygameView:
         self.font_tiny = pygame.font.SysFont("consola", 12)
         # Cargar sprites primero
         self.sprites = self._load_sprites()
+        # Cargar texturas de terreno
+        self.terrain_textures = self._load_terrain_textures()
+        # Cargar texturas animadas para el agua
+        self.agua_texturas = self._load_water_textures()
+        self.agua_frame_actual = 0
+        self.tiempo_animacion_agua = 500 # ms por frame de animación
+        self.ultimo_cambio_agua = pygame.time.get_ticks()
+
         # Intentar cargar y reproducir la música de fondo
         self.music_playing = False
         try:
@@ -97,6 +105,42 @@ class PygameView:
             print("La simulación usará círculos de colores en lugar de imágenes.")
             print("Para usar sprites, crea una carpeta 'assets' y coloca dentro los archivos .png de los animales (conejo.png, gato.png, etc.).\n")
             return None
+
+    def _load_terrain_textures(self):
+        """Carga las texturas para los diferentes tipos de terreno."""
+        textures = {}
+        texture_files = {
+            "fondo": "textura_fondo.png",
+            "selva": "textura_selva.png",
+            "pradera": "textura_pradera.png",
+            "montana": "textura_montana.png",
+            "santuario": "textura_santuario.png"
+        }
+        for name, filename in texture_files.items():
+            try:
+                textures[name] = pygame.image.load(f"assets/{filename}").convert()
+            except (pygame.error, FileNotFoundError):
+                print(f"Advertencia: No se encontró la textura '{filename}'. Se usará un color sólido.")
+                textures[name] = None
+        return textures
+
+
+    def _load_water_textures(self):
+        """Carga las texturas animadas para el agua (fondo_agua0.png, fondo_agua1.png, etc.)."""
+        texturas = []
+        i = 0
+        while True:
+            try:
+                ruta = f"assets/fondo_agua{i}.png"
+                texturas.append(pygame.image.load(ruta).convert())
+                i += 1
+            except (pygame.error, FileNotFoundError):
+                # Si no se encuentra el archivo, se asume que no hay más texturas.
+                break
+        if not texturas:
+            print("Advertencia: No se encontraron texturas de agua (ej: assets/fondo_agua0.png). Se usará un color sólido.")
+        return texturas
+
 
     def _create_buttons(self):
         """Crea los botones de la interfaz."""
@@ -134,22 +178,71 @@ class PygameView:
         textrect.topleft = (x, y)
         surface.blit(textobj, textrect)
 
+    def _draw_tiled_texture(self, surface, texture, rect):
+        """Rellena un rectángulo con una textura de forma repetida (tiling)."""
+        if not texture:
+            return
+        tex_w, tex_h = texture.get_size()
+        for y in range(rect.top, rect.bottom, tex_h):
+            for x in range(rect.left, rect.right, tex_w):
+                surface.blit(texture, (x, y))
+
+    def _update_water_animation(self):
+        """Actualiza el frame de la animación del agua basado en el tiempo."""
+        if not self.agua_texturas:
+            return
+        current_time = pygame.time.get_ticks()
+        if current_time - self.ultimo_cambio_agua > self.tiempo_animacion_agua:
+        time_per_frame = self.tiempo_animacion_agua
+        if current_time - self.ultimo_cambio_agua > time_per_frame:
+            self.ultimo_cambio_agua = current_time
+            self.agua_frame_actual = (self.agua_frame_actual + 1) % len(self.agua_texturas)
+
     def draw_simulation(self, ecosistema, logs, sim_over, animal_seleccionado):
         # 1. Dibujar fondos
         self.screen.fill(COLOR_BACKGROUND)
         pygame.draw.rect(self.screen, COLOR_SIM_AREA, (0, 0, SIM_WIDTH, SCREEN_HEIGHT))
+        if self.terrain_textures.get("fondo"):
+            self._draw_tiled_texture(self.screen, self.terrain_textures["fondo"], pygame.Rect(0, 0, SIM_WIDTH, SCREEN_HEIGHT))
+
+        # Actualizar animación del agua
+        self._update_water_animation()
 
         # Dibujar terreno
         for selva in ecosistema.terreno["selvas"]:
             pygame.draw.rect(self.screen, COLOR_SELVA, selva.rect)
+            if self.terrain_textures.get("selva"):
+                self._draw_tiled_texture(self.screen, self.terrain_textures["selva"], selva.rect)
+            else:
+                pygame.draw.rect(self.screen, COLOR_SELVA, selva.rect)
         for pradera in ecosistema.terreno["praderas"]:
             pygame.draw.rect(self.screen, COLOR_PRADERA, pradera.rect)
+            if self.terrain_textures.get("pradera"):
+                self._draw_tiled_texture(self.screen, self.terrain_textures["pradera"], pradera.rect)
+            else:
+                pygame.draw.rect(self.screen, COLOR_PRADERA, pradera.rect)
         for montana in ecosistema.terreno["montanas"]:
             pygame.draw.rect(self.screen, COLOR_MONTANA, montana.rect)
+            if self.terrain_textures.get("montana"):
+                self._draw_tiled_texture(self.screen, self.terrain_textures["montana"], montana.rect)
+            else:
+                pygame.draw.rect(self.screen, COLOR_MONTANA, montana.rect)
         for rio in ecosistema.terreno["rios"]:
-            pygame.draw.rect(self.screen, COLOR_RIO, rio.rect)
+            if self.agua_texturas:
+                textura_actual = self.agua_texturas[self.agua_frame_actual]
+                tex_w, tex_h = textura_actual.get_size()
+                for y in range(rio.rect.top, rio.rect.bottom, tex_h):
+                    for x in range(rio.rect.left, rio.rect.right, tex_w):
+                        self.screen.blit(textura_actual, (x, y))
+                self._draw_tiled_texture(self.screen, textura_actual, rio.rect)
+            else:
+                pygame.draw.rect(self.screen, COLOR_RIO, rio.rect) # Fallback a color sólido
         for santuario in ecosistema.terreno["santuarios"]:
             pygame.draw.rect(self.screen, COLOR_SANTUARIO, santuario.rect)
+            if self.terrain_textures.get("santuario"):
+                self._draw_tiled_texture(self.screen, self.terrain_textures["santuario"], santuario.rect)
+            else:
+                pygame.draw.rect(self.screen, COLOR_SANTUARIO, santuario.rect)
 
         # Dibujar carcasas
         for carcasa in ecosistema.recursos["carcasas"]:
