@@ -101,23 +101,9 @@ class PygameView:
     def _create_buttons(self):
         """Crea los botones de la interfaz."""
         buttons = {}
-<<<<<<< HEAD
-        btn_width, btn_height = 180, 35
-        btn_x = SIM_WIDTH + (UI_WIDTH - btn_width) / 2
-        buttons["next_day"] = Button(btn_x, SCREEN_HEIGHT - 220, btn_width, btn_height, "Siguiente Día", COLOR_BUTTON, COLOR_TEXT)
-        buttons["add_herb"] = Button(btn_x, SCREEN_HEIGHT - 175, btn_width, btn_height, "Añadir Herbívoro", COLOR_HERBIVORO, (0,0,0))
-        buttons["add_carn"] = Button(btn_x, SCREEN_HEIGHT - 130, btn_width, btn_height, "Añadir Carnívoro", COLOR_CARNIVORO, COLOR_TEXT)
-        buttons["add_omni"] = Button(btn_x, SCREEN_HEIGHT - 85, btn_width, btn_height, "Añadir Omnívoro", COLOR_OMNIVORO, COLOR_TEXT)
-        buttons["save"] = Button(SIM_WIDTH + 10, SCREEN_HEIGHT - 40, 85, 30, "Guardar", (0, 100, 0), COLOR_TEXT)
-        buttons["load"] = Button(SIM_WIDTH + 105, SCREEN_HEIGHT - 40, 85, 30, "Cargar", (100, 100, 0), COLOR_TEXT)
-        # Botón para controlar música (ON/OFF)
-        music_text = "Música: ON" if getattr(self, 'music_playing', False) else "Música: OFF"
-        buttons["music"] = Button(SIM_WIDTH + 200, SCREEN_HEIGHT - 40, 85, 30, music_text, (80, 80, 80), COLOR_TEXT)
-=======
         btn_width, btn_height = 120, 30
         col1_x = SIM_WIDTH + 20
         col2_x = SIM_WIDTH + 150
-        col3_x = SIM_WIDTH + 280
         
         # Botones de control de velocidad
         control_y = SCREEN_HEIGHT - 220
@@ -126,6 +112,7 @@ class PygameView:
         buttons["speed_2x"] = Button(SIM_WIDTH + 195, control_y, 45, 35, "x2", COLOR_BUTTON, COLOR_TEXT)
         buttons["speed_5x"] = Button(SIM_WIDTH + 250, control_y, 45, 35, "x5", COLOR_BUTTON, COLOR_TEXT)
         
+        # Botones para añadir animales
         buttons["add_conejo"] = Button(col1_x, SCREEN_HEIGHT - 175, btn_width, btn_height, "Añadir Conejo", COLOR_HERBIVORO, (0,0,0))
         buttons["add_raton"] = Button(col2_x, SCREEN_HEIGHT - 175, btn_width, btn_height, "Añadir Ratón", COLOR_HERBIVORO, (0,0,0))
         buttons["add_leopardo"] = Button(col1_x, SCREEN_HEIGHT - 135, btn_width, btn_height, "Añadir Leopardo", COLOR_CARNIVORO, COLOR_TEXT)
@@ -133,9 +120,12 @@ class PygameView:
         buttons["add_cerdo"] = Button(col1_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Cerdo", COLOR_OMNIVORO, COLOR_TEXT)
         buttons["add_mono"] = Button(col2_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Mono", COLOR_OMNIVORO, COLOR_TEXT)
 
-        buttons["save"] = Button(SIM_WIDTH + 10, SCREEN_HEIGHT - 40, 185, 30, "Guardar", (0, 100, 0), COLOR_TEXT)
-        buttons["load"] = Button(SIM_WIDTH + 205, SCREEN_HEIGHT - 40, 185, 30, "Cargar", (100, 100, 0), COLOR_TEXT)
->>>>>>> ee2541901ef448961e013a0f49e228f22c308844
+        # Botones de guardado, carga y música
+        buttons["save"] = Button(SIM_WIDTH + 10, SCREEN_HEIGHT - 40, 120, 30, "Guardar", (0, 100, 0), COLOR_TEXT)
+        buttons["load"] = Button(SIM_WIDTH + 140, SCREEN_HEIGHT - 40, 120, 30, "Cargar", (100, 100, 0), COLOR_TEXT)
+        music_text = "Música: ON" if getattr(self, 'music_playing', False) else "Música: OFF"
+        buttons["music"] = Button(SIM_WIDTH + 270, SCREEN_HEIGHT - 40, 120, 30, music_text, (80, 80, 80), COLOR_TEXT)
+
         return buttons
 
     def _draw_text(self, text, font, color, surface, x, y):
@@ -383,16 +373,7 @@ class SimulationController:
                 if event.type == pygame.MOUSEBUTTONDOWN and not sim_over:
                     pos = pygame.mouse.get_pos()
                     # Controles de simulación
-                    if self.view.buttons["pause_resume"].rect.collidepoint(pos):
-                        self.paused = not self.paused
-                    elif self.view.buttons["speed_1x"].rect.collidepoint(pos):
-                        self.sim_speed_multiplier = 1
-                    elif self.view.buttons["speed_2x"].rect.collidepoint(pos):
-                        self.sim_speed_multiplier = 2
-                    elif self.view.buttons["speed_5x"].rect.collidepoint(pos):
-                        self.sim_speed_multiplier = 5
-                    # Controles de animales y guardado
-                    elif self.view.buttons["add_conejo"].rect.collidepoint(pos):
+                    if self.view.buttons["add_conejo"].rect.collidepoint(pos):
                         self.ecosistema.agregar_animal(Conejo)
                     elif self.view.buttons["add_raton"].rect.collidepoint(pos):
                         self.ecosistema.agregar_animal(Raton)
@@ -420,6 +401,14 @@ class SimulationController:
                             self.view.toggle_music()
                         except Exception as e:
                             print(f"Error al alternar música desde controlador: {e}")
+                    elif self.view.buttons["pause_resume"].rect.collidepoint(pos):
+                        self.paused = not self.paused
+                    elif self.view.buttons["speed_1x"].rect.collidepoint(pos):
+                        self.sim_speed_multiplier = 1
+                    elif self.view.buttons["speed_2x"].rect.collidepoint(pos):
+                        self.sim_speed_multiplier = 2
+                    elif self.view.buttons["speed_5x"].rect.collidepoint(pos):
+                        self.sim_speed_multiplier = 5
                     else:
                         # Comprobar si se hizo clic en un animal
                         self.animal_seleccionado = None
