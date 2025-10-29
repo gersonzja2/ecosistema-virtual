@@ -679,11 +679,7 @@ class Ecosistema:
             estado = json.load(f)
 
         self.dia_total = estado["dia_total"]
-        # Cargar recursos, convirtiendo las carcasas de dict a objetos Carcasa
-        self.recursos["hierba"] = estado["recursos"].get("hierba", 100)
-        self.recursos["carcasas"] = [
-            Carcasa(c["x"], c["y"], c["energia_restante"]) for c in estado["recursos"].get("carcasas", [])
-        ]
+        self.recursos = estado["recursos"]
         for i, s_data in enumerate(estado["selvas"]):
             self.terreno["selvas"][i].bayas = s_data["bayas"]
 
