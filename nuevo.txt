@@ -1,0 +1,2 @@
+en los archivos nuevos.txt se debe añadir la descripciond del avance que hicieron.
+tipo comentando el avance, como una bitacora
