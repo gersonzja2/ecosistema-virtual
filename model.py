@@ -11,18 +11,18 @@ SIM_WIDTH = 800
 SCREEN_HEIGHT = 700
 
 # --- Constantes de Comportamiento Animal (Ajustadas para mayor supervivencia) ---
-COSTE_MOVIMIENTO = 0.3        # Reducido aún más para que el movimiento sea menos costoso.
+COSTE_MOVIMIENTO = 0.2        # Reducido aún más para que el movimiento sea menos costoso.
 AUMENTO_SED_MOVIMIENTO = 0.3  # Los animales se deshidratan más lentamente.
 VELOCIDAD_ANIMAL = 5          # Píxeles por paso de simulación
 UMBRAL_SED_BEBER = 60         # Nivel de sed para buscar agua activamente
 UMBRAL_HAMBRE_CARNIVORO = 70  # Nivel de energía para empezar a cazar
 UMBRAL_HAMBRE_OMNIVORO = 60   # Nivel de energía para buscar comida
-ENERGIA_HIERBA = 30           # Aumentado: la hierba es más nutritiva.
-ENERGIA_CAZA = 80             # Aumentado: la caza es más recompensante.
-ENERGIA_BAYAS = 35            # Aumentado: las bayas son más nutritivas.
-ENERGIA_PEZ = 30              # Aumentado: los peces son más nutritivos.
+ENERGIA_HIERBA = 25           # Balanceado: la hierba es nutritiva pero no demasiado
+ENERGIA_CAZA = 60             # Balanceado: la caza es recompensante pero no excesiva
+ENERGIA_BAYAS = 30            # Balanceado: las bayas son nutritivas pero menos que la caza
+ENERGIA_PEZ = 25              # Balanceado: los peces son nutritivos pero requieren esfuerzo
 COSTE_BUSCAR_COMIDA = 5       # Reducido: fallar en la búsqueda es menos penalizante.
-PROBABILIDAD_REPRODUCCION = 0.02 # BUG FIX: Reducido al 2% para una población más estable.
+PROBABILIDAD_REPRODUCCION = 0.01 # BUG FIX: Reducido al 1% para una población más estable.
 
 # Constantes para la reproducción
 ENERGIA_REPRODUCCION = 60 # Reducido: se necesita menos energía para reproducirse.
@@ -310,8 +310,8 @@ class Animal(ABC):
         pareja._energia = max(0, pareja._energia - 40)
 
         # BUG FIX: Añadir cooldown de reproducción
-        self.reproduction_cooldown = 15 # 15 días de espera
-        pareja.reproduction_cooldown = 15
+        self.reproduction_cooldown = 25 # 25 días de espera
+        pareja.reproduction_cooldown = 25
 
         # --- Lógica de Herencia Genética Sexual Mejorada ---
         nuevos_genes = {}
@@ -828,10 +828,10 @@ class Ecosistema:
         self.dias_por_estacion = 20
         self.estacion_actual = "Primavera"
         self.estaciones = {
-            "Primavera": {"crecimiento": 1.5, "coste_energia": 0}, # Coste nulo en primavera
-            "Verano":    {"crecimiento": 1.0, "coste_energia": 0}, # Sin coste de energía estacional en verano.
-            "Otoño":     {"crecimiento": 0.5, "coste_energia": 1}, # Coste ligero en otoño.
-            "Invierno":  {"crecimiento": 0.1, "coste_energia": 2}  # El invierno sigue siendo el más duro.
+            "Primavera": {"crecimiento": 2.0, "coste_energia": 0}, # Coste nulo y mayor crecimiento en primavera
+            "Verano":    {"crecimiento": 1.0, "coste_energia": 0.5}, # Coste ligero en verano
+            "Otoño":     {"crecimiento": 0.5, "coste_energia": 1}, # Coste moderado en otoño
+            "Invierno":  {"crecimiento": 0.1, "coste_energia": 1.5}  # El invierno es más balanceado
         }
         self.clima_actual = "Normal"
 
