@@ -1,6 +1,6 @@
 import pygame
 import random
-from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, ENERGIA_REPRODUCCION, EDAD_ADULTA, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, CELL_SIZE, MAX_HIERBA_PRADERA
+from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, ENERGIA_REPRODUCCION, EDAD_ADULTA, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, Halcon, Insecto, CELL_SIZE, MAX_HIERBA_PRADERA
 from graph import PopulationGraph
 
 # --- Constantes para Pygame ---
@@ -96,6 +96,8 @@ class PygameView:
             "Cabra": {"file": "cabra.png", "size": (15, 15)},
             "Cerdo": {"file": "cerdo.png", "size": (15, 15)},
             "Mono": {"file": "mono.png", "size": (15, 15)},
+            "Halcon": {"file": "halcon.png", "size": (15, 15)},
+            "Insecto": {"file": "insecto.png", "size": (8, 8)},
             "Pez": {"file": "pez.png", "size": (10, 10)},
             "arbol": {"file": "arbol_medium.png", "size": (30, 30)},
             "planta": {"file": "planta_small.png", "size": (12, 12)}
@@ -134,6 +136,8 @@ class PygameView:
         buttons["add_gato"] = Button(col2_x, SCREEN_HEIGHT - 135, btn_width, btn_height, "Añadir Gato", COLOR_CARNIVORO, COLOR_TEXT)
         buttons["add_cerdo"] = Button(col1_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Cerdo", COLOR_OMNIVORO, COLOR_TEXT)
         buttons["add_mono"] = Button(col2_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Mono", COLOR_OMNIVORO, COLOR_TEXT)
+        buttons["add_halcon"] = Button(col3_x, SCREEN_HEIGHT - 135, btn_width, btn_height, "Añadir Halcón", COLOR_CARNIVORO, COLOR_TEXT)
+        buttons["add_insecto"] = Button(col3_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Insecto", COLOR_HERBIVORO, (0,0,0))
 
         # Botones de guardado, carga y música
         buttons["save"] = Button(SIM_WIDTH + 10, SCREEN_HEIGHT - 40, 120, 30, "Guardar", (0, 100, 0), COLOR_TEXT)
@@ -232,7 +236,7 @@ class PygameView:
                 # --- Corrección del bug de la barra de vida ---
                 # Asegurarse de que la energía no sea negativa para el cálculo del porcentaje
                 # y evitar división por cero si max_energia fuera 0.
-                max_energia = animal.genes.get('max_energia', 1) or 1
+                max_energia = animal.genes.get('max_energia', 100) or 100
                 energia_percent = max(0, animal.energia) / max_energia
                 pygame.draw.rect(self.screen, (0,0,0), (bar_x-1, bar_y-1, bar_width+2, bar_height+2)) # Borde
                 pygame.draw.rect(self.screen, (90, 90, 90), (bar_x, bar_y, bar_width, bar_height))
@@ -390,7 +394,7 @@ class SimulationController:
 
     def _poblar_ecosistema(self):
         """Método privado para añadir los animales iniciales."""
-        tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono]
+        tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto]
         for tipo in tipos_de_animales:
             for _ in range(10):
                 self.ecosistema.agregar_animal(tipo)
@@ -446,6 +450,8 @@ class SimulationController:
             "add_gato": lambda: self.ecosistema.agregar_animal(Gato),
             "add_cerdo": lambda: self.ecosistema.agregar_animal(Cerdo),
             "add_mono": lambda: self.ecosistema.agregar_animal(Mono),
+            "add_halcon": lambda: self.ecosistema.agregar_animal(Halcon),
+            "add_insecto": lambda: self.ecosistema.agregar_animal(Insecto),
             "save": self._action_save,
             "load": self._action_load,
             "music": self.view.toggle_music,
