@@ -334,11 +334,11 @@ class Animal(ABC):
             dx_norm = (dx / magnitud) * velocidad
             dy_norm = (dy / magnitud) * velocidad
 
-            nuevo_x = max(0.0, min(self._x_float + dx_norm, float(SIM_WIDTH - 1)))
-            nuevo_y = max(0.0, min(self._y_float + dy_norm, float(SCREEN_HEIGHT - 1)))
+            nuevo_x = max(float(BORDE_MARGEN), min(self._x_float + dx_norm, float(SIM_WIDTH - 1 - BORDE_MARGEN)))
+            nuevo_y = max(float(BORDE_MARGEN), min(self._y_float + dy_norm, float(SCREEN_HEIGHT - 1 - BORDE_MARGEN)))
 
             # Solo aplicar coste si hay movimiento real
-            if abs(nuevo_x - self._x_float) > 0.01 or abs(nuevo_y - self._y_float) > 0.01:
+            if abs(nuevo_x - self._x_float) > 0.001 or abs(nuevo_y - self._y_float) > 0.001:
                 self._x_float = nuevo_x
                 self._y_float = nuevo_y
                 coste_movimiento = 0.15 + ecosistema.estaciones[ecosistema.estacion_actual]['coste_energia'] * 0.2
@@ -362,8 +362,7 @@ class Animal(ABC):
                     ecosistema.grid_hierba[gx][gy] > mejor_valor):
                     mejor_valor = ecosistema.grid_hierba[gx][gy]
                     # Moverse a un punto aleatorio dentro de la celda, no al centro
-                    mejor_pos = (gx * CELL_SIZE + random.randint(0, CELL_SIZE), 
-                                 gy * CELL_SIZE + random.randint(0, CELL_SIZE))
+                    mejor_pos = self._validar_objetivo_coordenadas(gx * CELL_SIZE + random.randint(0, CELL_SIZE), gy * CELL_SIZE + random.randint(0, CELL_SIZE))
         return mejor_pos
 
     def _encontrar_presa_cercana(self, ecosistema):

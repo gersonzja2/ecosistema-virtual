@@ -397,6 +397,15 @@ class SimulationController:
         self.view.update_hierba_surface(self.ecosistema) # Actualizar hierba después del crecimiento
         return self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales
     
+    def _actualizar_grafico(self):
+        """Calcula las poblaciones y actualiza el gráfico."""
+        poblaciones = (
+            sum(1 for a in self.ecosistema.animales if isinstance(a, Herbivoro)),
+            sum(1 for a in self.ecosistema.animales if isinstance(a, Carnivoro)),
+            sum(1 for a in self.ecosistema.animales if isinstance(a, Omnivoro))
+        )
+        self.view.graph.update(poblaciones)
+
     def _avanzar_hora(self):
         # Actualizar gráfico cada hora para ver cambios más suaves
         poblaciones = (
