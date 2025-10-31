@@ -119,12 +119,15 @@ class PygameView:
         buttons["add_gato"] = Button(col2_x, SCREEN_HEIGHT - 135, btn_width, btn_height, "Añadir Gato", COLOR_CARNIVORO, COLOR_TEXT)
         buttons["add_cerdo"] = Button(col1_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Cerdo", COLOR_OMNIVORO, COLOR_TEXT)
         buttons["add_mono"] = Button(col2_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Mono", COLOR_OMNIVORO, COLOR_TEXT)
-        buttons["add_halcon"] = Button(col3_x, SCREEN_HEIGHT - 135, btn_width, btn_height, "Añadir Halcón", COLOR_CARNIVORO, COLOR_TEXT)
-        buttons["add_insecto"] = Button(col3_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Insecto", COLOR_HERBIVORO, (0,0,0))
-        buttons["save"] = Button(SIM_WIDTH + 10, SCREEN_HEIGHT - 40, 120, 30, "Guardar", (0, 100, 0), COLOR_TEXT)
-        buttons["load"] = Button(SIM_WIDTH + 140, SCREEN_HEIGHT - 40, 120, 30, "Cargar", (100, 100, 0), COLOR_TEXT)
+        buttons["add_halcon"] = Button(col3_x, SCREEN_HEIGHT - 135, btn_width, btn_height, "Añadir Halcón", COLOR_CARNIVORO, COLOR_TEXT) # Ajuste de posición
+        buttons["add_insecto"] = Button(col3_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Insecto", COLOR_HERBIVORO, (0,0,0)) # Ajuste de posición
+        
+        btn_width_small, btn_height_small = 90, 30
+        buttons["save"] = Button(SIM_WIDTH + 10, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Guardar", (0, 100, 0), COLOR_TEXT)
+        buttons["load"] = Button(SIM_WIDTH + 105, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Cargar", (100, 100, 0), COLOR_TEXT)
+        buttons["restart"] = Button(SIM_WIDTH + 200, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Reiniciar", (200, 50, 50), COLOR_TEXT)
         music_text = "Música: ON" if getattr(self, 'music_playing', False) else "Música: OFF"
-        buttons["music"] = Button(SIM_WIDTH + 270, SCREEN_HEIGHT - 40, 120, 30, music_text, (80, 80, 80), COLOR_TEXT)
+        buttons["music"] = Button(SIM_WIDTH + 295, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, music_text, (80, 80, 80), COLOR_TEXT)
         return buttons
 
     def _draw_text(self, text, font, color, surface, x, y):
@@ -397,13 +400,22 @@ class SimulationController:
             "load": self._action_load,
             "music": self.view.toggle_music,
             "pause_resume": self._action_toggle_pause,
-            "next_day": self._action_advance_day
+            "next_day": self._action_advance_day,
+            "restart": self._action_restart
         }
 
     def _action_save(self): self.ecosistema.guardar_estado()
     def _action_load(self):
         try: self.ecosistema.cargar_estado(); self.view.graph.history = []
         except FileNotFoundError: print("¡No se encontró guardado!")
+
+    def _action_restart(self):
+        print("Reiniciando simulación...")
+        self.ecosistema = Ecosistema()
+        self._poblar_ecosistema()
+        self.view.graph.history.clear()
+        self.animal_seleccionado = None
+        self.paused = True
     def _action_toggle_pause(self): self.paused = not self.paused
     def _action_advance_day(self):
         if self.ecosistema.dia_total < self.dias_simulacion and self.ecosistema.animales:
