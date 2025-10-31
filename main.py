@@ -290,6 +290,10 @@ class PygameView:
 
         # 3. Dibujar UI (panel de texto)
         ui_x = SIM_WIDTH + 10
+        # Dibujar el fondo del panel de UI para limpiar el texto anterior
+        ui_rect = pygame.Rect(SIM_WIDTH, 0, UI_WIDTH, SCREEN_HEIGHT)
+        pygame.draw.rect(self.screen, COLOR_BACKGROUND, ui_rect)
+
         self._draw_text(f"DÍA: {ecosistema.dia_total}", self.font_header, COLOR_TEXT, self.screen, ui_x, 5)
         
         # Estado del ecosistema
