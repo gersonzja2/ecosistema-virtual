@@ -1,6 +1,7 @@
 import pygame
 import random
-from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, Halcon, Insecto, CELL_SIZE, MAX_HIERBA_PRADERA
+import math  # Añadido para cálculos de movimiento
+from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, Halcon, Insecto, CELL_SIZE, MAX_HIERBA_PRADERA, Rio, Pez
 from graph import PopulationGraph
 
 # --- Constantes para Pygame ---
@@ -192,10 +193,11 @@ class PygameView:
         pez_sprite = self.sprites.get("Pez") if self.sprites else None
         for rio in ecosistema.terreno["rios"]:
             for pez in rio.peces:
-                if pez_sprite:
-                    self.screen.blit(pez_sprite, (pez.x - pez_sprite.get_width() // 2, pez.y - pez_sprite.get_height() // 2))
-                else:
-                    pygame.draw.circle(self.screen, COLOR_PEZ, (pez.x, pez.y), 3)
+                if not pez.fue_comido:  # Solo dibujar peces que no han sido comidos
+                    if pez_sprite:
+                        self.screen.blit(pez_sprite, (pez.x - pez_sprite.get_width() // 2, pez.y - pez_sprite.get_height() // 2))
+                    else:
+                        pygame.draw.circle(self.screen, COLOR_PEZ, (pez.x, pez.y), 3)
 
         for carcasa in ecosistema.recursos["carcasas"]:
             alpha = max(0, 255 - carcasa.dias_descomposicion * 50)
@@ -331,18 +333,21 @@ class PygameView:
 
 class SimulationController:
     def __init__(self, dias_simulacion: int):
+        pygame.init()  # Asegurar que pygame está inicializado
         self.ecosistema = Ecosistema()
         self.view = PygameView()
         self.dias_simulacion = dias_simulacion
         self.animal_seleccionado = None
         self.paused = True
         
-        self.sim_speed_multiplier = 5  # Velocidad fija
-        self.base_time_per_hour = 50   # Tiempo base por hora en ms
-        self.last_update_time = 0
+        # Ajustar velocidades
+        self.sim_speed_multiplier = 3  # Aumentado para mejor fluidez
+        self.base_time_per_hour = 25   # Reducido para mejor respuesta
+        self.last_update_time = pygame.time.get_ticks()
+        self.clock = pygame.time.Clock()
 
         self.holding_next_day = False
-        self.next_day_cooldown = 150
+        self.next_day_cooldown = 50  # Reducido para mejor respuesta
 
     def _poblar_ecosistema(self):
         tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto]
@@ -364,6 +369,14 @@ class SimulationController:
         return False
     
     def _avanzar_hora(self):
+        # Actualizar gráfico cada hora para ver cambios más suaves
+        poblaciones = (
+            sum(1 for a in self.ecosistema.animales if isinstance(a, Herbivoro)),
+            sum(1 for a in self.ecosistema.animales if isinstance(a, Carnivoro)),
+            sum(1 for a in self.ecosistema.animales if isinstance(a, Omnivoro))
+        )
+        self.view.graph.update(poblaciones)
+        
         self.ecosistema.simular_hora()
         if self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales:
             return True
@@ -393,7 +406,11 @@ class SimulationController:
         except FileNotFoundError: print("¡No se encontró guardado!")
     def _action_toggle_pause(self): self.paused = not self.paused
     def _action_advance_day(self):
-        return self._avanzar_dia()
+        if self.ecosistema.dia_total < self.dias_simulacion and self.ecosistema.animales:
+            # Hacer más lento el avance manual del día
+            self.next_day_cooldown = 400  # Era 250
+            return self._avanzar_dia()
+        return True # La simulación ya ha terminado
 
     def run(self):
         self._poblar_ecosistema()
@@ -401,27 +418,22 @@ class SimulationController:
         running = True
         sim_over = False
         self._setup_button_actions()
-        self.last_update_time = pygame.time.get_ticks()
 
         while running:
-            if not self.paused and not sim_over:
-                current_time = pygame.time.get_ticks()
-                time_per_step = self.base_time_per_hour / self.sim_speed_multiplier if self.sim_speed_multiplier > 0 else float('inf')
-                if current_time - self.last_update_time > time_per_step:
-                    sim_over = self._avanzar_hora()
-                    self.last_update_time = current_time
-                    if self.animal_seleccionado and not self.animal_seleccionado.esta_vivo:
-                        self.animal_seleccionado = None
-            
-            if self.holding_next_day and not sim_over:
-                current_time = pygame.time.get_ticks()
-                if current_time - self.last_update_time > self.next_day_cooldown:
-                    sim_over = self._avanzar_hora()
-                    self.last_update_time = current_time
-                    self.next_day_cooldown = max(50, self.next_day_cooldown - 10)
-                    if self.animal_seleccionado and not self.animal_seleccionado.esta_vivo:
-                        self.animal_seleccionado = None
+            self.clock.tick(60)  # Mantener 60 FPS constantes
 
+            current_time = pygame.time.get_ticks()
+            delta_time = current_time - self.last_update_time
+
+            # Actualizar más frecuentemente
+            if not self.paused and not sim_over and delta_time > self.base_time_per_hour / self.sim_speed_multiplier:
+                sim_over = self._avanzar_hora()
+                self.last_update_time = current_time
+                
+                if self.animal_seleccionado and not self.animal_seleccionado.esta_vivo:
+                    self.animal_seleccionado = None
+
+            # Resto del código del bucle principal sin cambios
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -465,7 +477,7 @@ class SimulationController:
                                 break
 
             self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.sim_speed_multiplier)
-
+    
         self.view.close()
 
 # --- Ejecución Principal ---
