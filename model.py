@@ -11,6 +11,7 @@ SCREEN_HEIGHT = 700
 # --- Constantes para la Gestión de Recursos ---
 CELL_SIZE = 20
 MAX_HIERBA_NORMAL = 70
+BORDE_MARGEN = 20 # Margen de seguridad para que los animales no se acerquen a los bordes
 MAX_HIERBA_PRADERA = 120
 
 # --- Clases del Entorno ---
@@ -124,13 +125,15 @@ class Animal(ABC):
         self._x_float = float(x)
         self._y_float = float(y)
         self._edad = max(0, edad)
-        self._energia = max(0, min(energia, 100))
         self._sed = 0
         if max_energia is None:
             max_energia = max(80, min(120, 100 + random.randint(-10, 10)))
         self.max_energia = max_energia
+        self._energia = max(0, min(energia, self.max_energia))
         self._esta_vivo = True
-        self.objetivo = None  # Para un movimiento más inteligente (p. ej. buscar comida)
+        self.estado = "deambulando" # Estados: deambulando, buscando_comida, buscando_agua, cazando, huyendo
+        self.objetivo = None  # Puede ser una tupla (x,y) o un objeto Animal
+        
         type(self).contador = getattr(type(self), 'contador', 0) + 1
 
     @property
@@ -165,61 +168,183 @@ class Animal(ABC):
     def beber(self, ecosistema) -> str:
         pass
 
-    def moverse(self, ecosistema: 'Ecosistema') -> str:
-        # Si no hay objetivo o se ha alcanzado, buscar uno nuevo
-        if self.objetivo is None or math.sqrt((self._x_float - self.objetivo[0])**2 + (self._y_float - self.objetivo[1])**2) < 10:
-            self.objetivo = None
-            # Prioridad 1: Buscar comida si tiene hambre
-            if self.energia < self.max_energia * 0.7:
-                if isinstance(self, Herbivoro):
-                    self.objetivo = self._encontrar_hierba_cercana(ecosistema)
-                elif isinstance(self, Carnivoro):
-                    # Desempaquetamos la tupla: (presa, distancia_sq). Solo necesitamos la presa aquí.
-                    presa, _ = self._encontrar_presa_cercana(ecosistema)
+    def _validar_objetivo_coordenadas(self, x, y):
+        """Asegura que un objetivo de coordenadas esté dentro del margen de seguridad."""
+        valid_x = max(BORDE_MARGEN, min(x, SIM_WIDTH - 1 - BORDE_MARGEN))
+        valid_y = max(BORDE_MARGEN, min(y, SCREEN_HEIGHT - 1 - BORDE_MARGEN))
+        return (valid_x, valid_y)
+
+    def _decidir_proximo_paso(self, ecosistema: 'Ecosistema'):
+        """Evalúa las necesidades y establece el estado y el objetivo."""
+        # Lógica de "pegajosidad" (stickiness) para evitar que el animal cambie de opinión constantemente.
+        # Si ya está buscando algo, que continúe hasta satisfacer su necesidad.
+        if self.estado == "buscando_agua" and self._sed > 30:
+            # Si el objetivo es inválido, buscar uno nuevo, pero seguir buscando agua.
+            if self.objetivo is None: self.estado = "deambulando" # Forzar re-evaluación
+            else: return # Seguir buscando agua
+        if self.estado in ["buscando_comida", "cazando"] and self.energia < self.max_energia * 0.9:
+            if self.objetivo is None or (isinstance(self.objetivo, Animal) and not self.objetivo.esta_vivo):
+                self.estado = "deambulando" # Forzar re-evaluación
+            else:
+                return # Seguir buscando comida/cazando
+        # Si está huyendo pero ya no hay peligro, que re-evalúe.
+        if self.estado == "huyendo":
+            depredador = self._encontrar_depredador_cercano(ecosistema)
+            if not depredador:
+                self.estado = "deambulando" # El peligro pasó, buscar otra cosa que hacer
+
+
+        # Prioridad 0: Huir si hay un depredador cerca (para presas)
+        if isinstance(self, (Herbivoro, Omnivoro)):
+            depredador_cercano = self._encontrar_depredador_cercano(ecosistema)
+            if depredador_cercano:
+                self.estado = "huyendo"
+                # Calcular vector de huida (opuesto al depredador)
+                dx = self._x_float - depredador_cercano.x
+                dy = self._y_float - depredador_cercano.y
+                magnitud = math.sqrt(dx*dx + dy*dy) if math.sqrt(dx*dx + dy*dy) > 0 else 1
+                # Proyectar un punto de huida a 100 unidades de distancia
+                target_x_propuesto = self._x_float + (dx / magnitud) * 100
+                target_y_propuesto = self._y_float + (dy / magnitud) * 100
+                # Asegurarse de que el objetivo de huida esté dentro de los límites
+                self.objetivo = self._validar_objetivo_coordenadas(target_x_propuesto, target_y_propuesto)
+                return
+
+        # Prioridad 1: Beber si tiene mucha sed
+        if self._sed > 80:
+            rio_cercano = self._encontrar_rio_cercano(ecosistema)
+            if rio_cercano:
+                self.estado = "buscando_agua"
+                # Moverse a un punto aleatorio en el borde del río
+                target_x = random.randint(rio_cercano.rect.left, rio_cercano.rect.right)
+                target_y = random.randint(rio_cercano.rect.top, rio_cercano.rect.bottom)
+                self.objetivo = self._validar_objetivo_coordenadas(target_x, target_y)
+                return
+
+        # Prioridad 2: Comer si tiene hambre
+        if self.energia < self.max_energia * 0.7:
+            if isinstance(self, Herbivoro):
+                objetivo_comida = self._encontrar_hierba_cercana(ecosistema)
+                if objetivo_comida:
+                    self.estado = "buscando_comida"
+                    self.objetivo = self._validar_objetivo_coordenadas(objetivo_comida[0], objetivo_comida[1])
+                    return
+            elif isinstance(self, (Carnivoro, Omnivoro)):
+                # Lógica de decisión para carnívoros y omnívoros
+                presa, dist_presa_sq = self._encontrar_presa_cercana(ecosistema)
+                
+                objetivo_final = None
+                estado_final = "deambulando"
+
+                if isinstance(self, Omnivoro):
+                    selva, dist_selva_sq = self._encontrar_selva_cercana(ecosistema) # dist_selva_sq puede ser inf
+
+                    # Dar una ligera preferencia a las bayas si están relativamente cerca,
+                    # ya que son una fuente de comida más segura que la caza.
+                    # Comparamos si la distancia a la selva es menor que el 80% de la distancia a la presa.
+                    if selva and (not presa or dist_selva_sq < dist_presa_sq * 0.8):
+                        target_x = random.randint(selva.rect.left, selva.rect.right)
+                        target_y = random.randint(selva.rect.top, selva.rect.bottom)
+                        objetivo_final = self._validar_objetivo_coordenadas(target_x, target_y)
+                        estado_final = "buscando_comida"
+                    elif presa:
+                        objetivo_final = presa
+                        estado_final = "cazando"
+
+                else: # Si es Carnivoro puro
                     if presa:
-                        self.objetivo = (presa.x, presa.y)
-            # Prioridad 2: Buscar agua si tiene sed (si no busca comida)
-            elif self._sed > 80:
-                rio_cercano = self._encontrar_rio_cercano(ecosistema)
-                if rio_cercano:
-                    self.objetivo = (rio_cercano.rect.centerx, rio_cercano.rect.centery)
-            
-            # Si no hay un objetivo específico, deambular aleatoriamente
-            if self.objetivo is None:
-                # Corregido: Asegurarse de que el objetivo de deambulación esté dentro de los límites
-                target_x = self._x_float + random.randint(-150, 150) # Aumentar el rango para trayectorias más largas
-                target_y = self._y_float + random.randint(-150, 150) # Aumentar el rango para trayectorias más largas
-                # Limitar (clamp) el objetivo a las dimensiones de la simulación
-                target_x = max(0, min(target_x, SIM_WIDTH - 1))
-                target_y = max(0, min(target_y, SCREEN_HEIGHT - 1))
-                self.objetivo = (target_x, target_y)
+                        objetivo_final = presa
+                        estado_final = "cazando"
+
+                if objetivo_final:
+                    self.objetivo = objetivo_final
+                    self.estado = estado_final
+                    return
+
+        # Si no hay necesidades urgentes, deambular
+        self.estado = "deambulando"
+        # --- Lógica de Deambulación Segura (Evita atascos en bordes) ---
+        # El objetivo se genera directamente dentro de los límites seguros.
+        rango_movimiento = 150
+        min_x = max(BORDE_MARGEN, self._x_float - rango_movimiento)
+        max_x = min(SIM_WIDTH - 1 - BORDE_MARGEN, self._x_float + rango_movimiento)
+        min_y = max(BORDE_MARGEN, self._y_float - rango_movimiento)
+        max_y = min(SCREEN_HEIGHT - 1 - BORDE_MARGEN, self._y_float + rango_movimiento)
+
+        self.objetivo = (random.uniform(min_x, max_x), random.uniform(min_y, max_y))
+
+    def moverse(self, ecosistema: 'Ecosistema') -> str:
+        # Si no hay objetivo o el objetivo actual ya no es válido, encontrar uno nuevo.
+        if self.objetivo is None or (self.estado == "cazando" and not self.objetivo.esta_vivo):
+            self._decidir_proximo_paso(ecosistema)
+
+        # Si sigue sin haber objetivo, no hacer nada.
+        if self.objetivo is None:
+            return ""
+
+        # Determinar las coordenadas del objetivo
+        if self.estado == "cazando" and isinstance(self.objetivo, Animal):
+            # El objetivo es un animal, se mueve.
+            if not self.objetivo.esta_vivo: # Si la presa murió mientras la perseguía
+                self.objetivo = None
+                return "" # Re-evaluar en el siguiente ciclo
+            target_x, target_y = self.objetivo.x, self.objetivo.y
+        else:
+            # El objetivo es una coordenada estática (comida, agua, punto de paseo).
+            if not isinstance(self.objetivo, tuple): # Si el objetivo no es una tupla (p.ej. un animal muerto)
+                self.objetivo = None
+                return ""
+            target_x, target_y = self.objetivo
 
         # Moverse hacia el objetivo
-        if self.objetivo:
-            dx = self.objetivo[0] - self._x_float
-            dy = self.objetivo[1] - self._y_float
-        else: # Movimiento por defecto si no hay objetivo
-            dx = random.uniform(-1, 1)
-            dy = random.uniform(-1, 1)
-        
+        dx = target_x - self._x_float
+        dy = target_y - self._y_float
+        distancia_al_objetivo = math.sqrt(dx*dx + dy*dy)
+
+        # Lógica de llegada al objetivo
+        if distancia_al_objetivo < 15: # Umbral de llegada
+            if self.estado == "buscando_agua":
+                self.beber(ecosistema)
+            elif self.estado == "buscando_comida" or self.estado == "cazando":
+                self.comer(ecosistema)
+
+            # Si después de la acción la necesidad está satisfecha, o si estaba deambulando, buscar nuevo objetivo.
+            if self.estado in ["deambulando", "huyendo"] or (self.estado == "buscando_agua" and self._sed < 50) or (self.estado == "buscando_comida" and self.energia > self.max_energia * 0.8):
+                self.objetivo = None # Forzar re-evaluación en el siguiente ciclo
+
+            # Caso especial para herbívoros: si hay comida, quedarse. Si no, buscar más.
+            if isinstance(self, Herbivoro) and self.estado == "buscando_comida":
+                grid_x, grid_y = int(self.x // CELL_SIZE), int(self.y // CELL_SIZE)
+                # Si la hierba se agotó o el animal está saciado, buscar un nuevo objetivo general.
+                if ecosistema.grid_hierba[grid_x][grid_y] <= 5 or self.energia > self.max_energia * 0.9:
+                    self.objetivo = None # Buscar nueva zona de pasto
+                else:
+                    # Si sigue habiendo hierba y tiene hambre, "pastorear" en la misma celda.
+                    # Generar un nuevo micro-objetivo dentro de la celda actual para seguir comiendo.
+                    nuevo_x = grid_x * CELL_SIZE + random.randint(0, CELL_SIZE)
+                    nuevo_y = grid_y * CELL_SIZE + random.randint(0, CELL_SIZE)
+                    self.objetivo = self._validar_objetivo_coordenadas(nuevo_x, nuevo_y)
+
+            return "" # Movimiento completado por ahora
+
         # Normalizar el vector de movimiento para mantener una velocidad constante
         magnitud = math.sqrt(dx*dx + dy*dy)
         if magnitud > 0:
-            # Reducir la velocidad de 5 a 2 para un movimiento más natural
-            velocidad = 1.2 # Reducir aún más la velocidad para un movimiento más calmado
-            dx_norm = (dx / magnitud) * velocidad 
-            dy_norm = (dy / magnitud) * velocidad 
-        
-        nuevo_x = max(0.0, min(self._x_float + dx_norm, float(SIM_WIDTH - 1)))
-        nuevo_y = max(0.0, min(self._y_float + dy_norm, float(SCREEN_HEIGHT - 1)))
+            velocidad = 1.8 if self.estado == "huyendo" else 1.5 # Huir más rápido
+            dx_norm = (dx / magnitud) * velocidad
+            dy_norm = (dy / magnitud) * velocidad
 
-        # Solo aplicar coste si hay movimiento real
-        if abs(nuevo_x - self._x_float) > 0.01 or abs(nuevo_y - self._y_float) > 0.01:
-            self._x_float = nuevo_x
-            self._y_float = nuevo_y
-            coste_movimiento = 0.15 + ecosistema.estaciones[ecosistema.estacion_actual]['coste_energia'] * 0.2
-            self._energia -= coste_movimiento
-            self._sed += 0.15
+            nuevo_x = max(0.0, min(self._x_float + dx_norm, float(SIM_WIDTH - 1)))
+            nuevo_y = max(0.0, min(self._y_float + dy_norm, float(SCREEN_HEIGHT - 1)))
+
+            # Solo aplicar coste si hay movimiento real
+            if abs(nuevo_x - self._x_float) > 0.01 or abs(nuevo_y - self._y_float) > 0.01:
+                self._x_float = nuevo_x
+                self._y_float = nuevo_y
+                coste_movimiento = 0.15 + ecosistema.estaciones[ecosistema.estacion_actual]['coste_energia'] * 0.2
+                self._energia -= coste_movimiento
+                self._sed += 0.15
+        # Se ha eliminado el sistema anti-atascos "push". La nueva lógica de generación de objetivos lo hace innecesario.
         return ""
 
     def _encontrar_hierba_cercana(self, ecosistema):
@@ -228,11 +353,11 @@ class Animal(ABC):
         mejor_pos = None
         mejor_valor = 0
         
-        # Buscar en un radio de 5 celdas alrededor del animal
-        for dx in range(-5, 6):
-            for dy in range(-5, 6):
+        # Buscar en un radio de 7 celdas alrededor del animal
+        for dx in range(-7, 8):
+            for dy in range(-7, 8):
                 gx, gy = grid_x + dx, grid_y + dy
-                if (0 <= gx < ecosistema.grid_width and 
+                if (0 <= gx < ecosistema.grid_width and
                     0 <= gy < ecosistema.grid_height and 
                     ecosistema.grid_hierba[gx][gy] > mejor_valor):
                     mejor_valor = ecosistema.grid_hierba[gx][gy]
@@ -242,13 +367,16 @@ class Animal(ABC):
         return mejor_pos
 
     def _encontrar_presa_cercana(self, ecosistema):
-        presas_cercanas = ecosistema.obtener_animales_cercanos(self.x, self.y, 5)
+        presas_cercanas = ecosistema.obtener_animales_cercanos(self.x, self.y, 7) # Aumentar radio de búsqueda
         mejor_presa, menor_dist_sq = None, float('inf')
         
         # La lógica de si se puede cazar (tamaño, tipo) se mueve a _puede_cazar
         for presa in presas_cercanas:
             # La comprobación de si la presa es válida se hace ahora aquí
             # para que el animal no persiga presas que no puede cazar.
+            # NUEVO: No considerar presas que ya están siendo cazadas por otro animal.
+            if presa.estado == "huyendo":
+                continue
             if self._puede_cazar(presa):
                 # Usar distancia al cuadrado para evitar el costoso cálculo de la raíz cuadrada
                 dist_sq = (self.x - presa.x)**2 + (self.y - presa.y)**2
@@ -257,6 +385,21 @@ class Animal(ABC):
                     mejor_presa = presa
         # Devolvemos la presa y la distancia al cuadrado para evitar recalcularla
         return mejor_presa, menor_dist_sq
+
+    def _encontrar_depredador_cercano(self, ecosistema):
+        """Busca depredadores cercanos que puedan cazar a este animal."""
+        animales_cercanos = ecosistema.obtener_animales_cercanos(self.x, self.y, 6) # Radio de detección de 6 celdas
+        for posible_depredador in animales_cercanos:
+            # Comprobar si el animal cercano es un depredador y si puede cazar a 'self'
+            if isinstance(posible_depredador, (Carnivoro, Omnivoro)):
+                # Si el depredador está huyendo, no es una amenaza inmediata
+                if posible_depredador.estado == "huyendo":
+                    continue
+                # Usamos el método _puede_cazar del depredador para ver si somos una presa válida para él
+                if posible_depredador._puede_cazar(self):
+                    # ¡Peligro!
+                    return posible_depredador
+        return None
 
     def _encontrar_rio_cercano(self, ecosistema):
         mejor_rio = None
@@ -268,6 +411,17 @@ class Animal(ABC):
                 menor_dist_sq = dist_sq
                 mejor_rio = rio
         return mejor_rio
+
+    def _encontrar_selva_cercana(self, ecosistema):
+        mejor_selva = None
+        menor_dist_sq = float('inf')
+        for selva in ecosistema.terreno["selvas"]:
+            if selva.bayas > 10: # Solo considerar selvas con suficientes bayas
+                dist_sq = (self.x - selva.rect.centerx)**2 + (self.y - selva.rect.centery)**2
+                if dist_sq < menor_dist_sq:
+                    menor_dist_sq = dist_sq
+                    mejor_selva = selva
+        return mejor_selva, menor_dist_sq
 
     def envejecer(self, ecosistema: 'Ecosistema') -> str:
         self._edad += 1
@@ -290,13 +444,28 @@ class Animal(ABC):
 
     def reproducirse(self, ecosistema: 'Ecosistema') -> str:
         # Ajustar condiciones de reproducción
-        if (self.edad > 30 and  # Edad de madurez para reproducirse
-            self.energia > self.max_energia * 0.7 and
-            random.random() < 0.025):  # Probabilidad de reproducción reducida al 2.5% para un crecimiento más estable
+        prob_base = 0.025 # Probabilidad base de reproducción (2.5%)
+
+        # --- Lógica de Capacidad de Carga para evitar sobrepoblación ---
+        if isinstance(self, Herbivoro):
+            limite_poblacion = 80
+            conteo_actual = sum(1 for a in ecosistema.animales if isinstance(a, Herbivoro))
+        elif isinstance(self, Carnivoro):
+            limite_poblacion = 40
+            conteo_actual = sum(1 for a in ecosistema.animales if isinstance(a, Carnivoro))
+        else: # Omnivoro
+            limite_poblacion = 50
+            conteo_actual = sum(1 for a in ecosistema.animales if isinstance(a, Omnivoro))
+
+        # Si la población actual supera el 70% del límite, la probabilidad de reproducción disminuye.
+        if conteo_actual > limite_poblacion * 0.7:
+            prob_base *= (limite_poblacion - conteo_actual) / (limite_poblacion * 0.3) # Reducción lineal
+
+        if (self.edad > 45 and self.energia > self.max_energia * 0.85 and random.random() < prob_base):
             # Crear una cría del mismo tipo
             cría = type(self)(f"{self.nombre} Jr.", self.x, self.y)
             ecosistema.animales_nuevos.append(cría)
-            self._energia -= 20  # Reducir el coste de energía por reproducirse
+            self._energia -= 35  # Reducir el coste de energía por reproducirse
             return f"{self.nombre} se ha reproducido."
         return ""
 
@@ -306,7 +475,7 @@ class Animal(ABC):
 
 class Herbivoro(Animal):
     def comer(self, ecosistema) -> str:
-        # Los herbívoros comen hierba si tienen hambre
+        # Los herbívoros comen hierba si están en una celda con hierba
         if self.energia < self.max_energia * 0.9:  # Hacer que coman más frecuentemente
             grid_x = int(self.x // CELL_SIZE)
             grid_y = int(self.y // CELL_SIZE)
@@ -314,15 +483,16 @@ class Herbivoro(Animal):
             # Asegurarse de que las coordenadas están dentro de los límites del mapa
             if 0 <= grid_x < ecosistema.grid_width and 0 <= grid_y < ecosistema.grid_height:
                 if ecosistema.grid_hierba[grid_x][grid_y] > 0:
-                    comido = min(ecosistema.grid_hierba[grid_x][grid_y], 15)  # Aumentar cantidad que comen
+                    comido = min(ecosistema.grid_hierba[grid_x][grid_y], 20)  # Aumentar cantidad que comen
                     self._energia += comido * 4  # Aumentar energía obtenida
                     self._sed -= 5  # Reducir sed al comer hierba
                     self._energia = min(self._energia, self.max_energia)
                     ecosistema.grid_hierba[grid_x][grid_y] -= comido
-                    return f"{self.nombre} comió hierba."
+                    ecosistema.hierba_cambio = True # Notificar que la hierba cambió
+                    return f"{self.nombre} comió hierba." # No es necesario devolver mensaje para optimizar
         return ""
 
-    def beber(self, ecosistema) -> str:
+    def beber(self, ecosistema: 'Ecosistema') -> str:
         if self._sed > 50:
             for rio in ecosistema.terreno["rios"]:
                 if rio.rect.collidepoint(self.x, self.y):
@@ -332,19 +502,19 @@ class Herbivoro(Animal):
 
 class Carnivoro(Animal):
     def comer(self, ecosistema) -> str:
-        # Los carnívoros cazan solo cuando tienen bastante hambre para darles tiempo a otras actividades.
-        if self.energia < self.max_energia * 0.75: # Cazar antes, con más energía
-            # Lógica de caza optimizada: _encontrar_presa_cercana ahora devuelve la distancia^2
-            presa_objetivo, dist_sq = self._encontrar_presa_cercana(ecosistema)
-            # La comprobación de si se puede cazar ya se hizo en _encontrar_presa_cercana
-            if presa_objetivo: 
-                # Comparamos cuadrados para evitar sqrt. Rango de caza reducido a 15 (15*15=225)
-                if dist_sq < 225:  # Rango de caza al cuadrado
+        # Los carnívoros intentan comer si están cazando y cerca de su presa.
+        if self.estado == "cazando" and isinstance(self.objetivo, Animal) and self.objetivo.esta_vivo:
+            presa_objetivo = self.objetivo
+            if self._puede_cazar(presa_objetivo):
+                dist_sq = (self.x - presa_objetivo.x)**2 + (self.y - presa_objetivo.y)**2
+                # Rango de ataque de 15 píxeles (15*15=225)
+                if dist_sq < 225:
                     presa_objetivo._esta_vivo = False # La presa muere
                     ecosistema.agregar_carcasa(presa_objetivo.x, presa_objetivo.y)
                     self._energia += 90  # Aumentar energía por caza
                     self._sed -= 10  # Reducir sed al comer presas
                     self._energia = min(self._energia, self.max_energia)
+                    self.objetivo = None # Cazó, buscar otra cosa que hacer
                     return f"{self.nombre} cazó a {presa_objetivo.nombre}."
         return ""
 
@@ -355,7 +525,7 @@ class Carnivoro(Animal):
         es_tamano_adecuado = self.max_energia >= presa.max_energia * 0.8
         return (presa is not self and es_presa_valida and es_tamano_adecuado and presa.esta_vivo and self.energia > 30)
 
-    def beber(self, ecosistema) -> str:
+    def beber(self, ecosistema: 'Ecosistema') -> str:
         if self._sed > 50:
             for rio in ecosistema.terreno["rios"]:
                 if rio.rect.collidepoint(self.x, self.y):
@@ -365,26 +535,27 @@ class Carnivoro(Animal):
 
 class Omnivoro(Animal):
     def comer(self, ecosistema) -> str:
-        if self.energia < self.max_energia * 0.7:
-            # Prioridad 1 (Optimizada): Intentar comer bayas si está en una selva.
-            # En lugar de iterar por todas las selvas, comprobamos si la posición actual está en una.
+        if self.energia < self.max_energia * 0.8:
+            # Prioridad 1: Comer bayas si está en una selva.
             for selva in ecosistema.terreno["selvas"]:
                 if selva.rect.collidepoint(self.x, self.y) and selva.bayas > 0:
                     energia_ganada = min(30, selva.bayas * 2)  # Aumentar energía de bayas
                     self._energia = min(self.max_energia, self._energia + energia_ganada)
                     selva.bayas = max(0, selva.bayas - 10)
+                    self.objetivo = None # Comió, buscar otra cosa que hacer.
                     return f"{self.nombre} comió bayas."
 
-            # Prioridad 2 (Optimizada): Si no hay bayas, intentar cazar.
-            # Reutilizamos la lógica optimizada de búsqueda de presas.
-            presa_objetivo, dist_sq = self._encontrar_presa_cercana(ecosistema)
-            if presa_objetivo and self._puede_cazar(presa_objetivo):
-                # Comparamos cuadrados para evitar sqrt. Rango de caza reducido a 12 (12*12=144)
-                if dist_sq < 144: # Rango de caza al cuadrado
-                    presa_objetivo._esta_vivo = False
-                    ecosistema.agregar_carcasa(presa_objetivo.x, presa_objetivo.y)
-                    self._energia = min(self.max_energia, self._energia + 75) # Aumentar energía por caza
-                    return f"{self.nombre} cazó a {presa_objetivo.nombre}."
+            # Prioridad 2: Cazar si está cerca de una presa.
+            if self.estado == "cazando" and isinstance(self.objetivo, Animal) and self.objetivo.esta_vivo:
+                presa_objetivo = self.objetivo
+                if self._puede_cazar(presa_objetivo):
+                    dist_sq = (self.x - presa_objetivo.x)**2 + (self.y - presa_objetivo.y)**2
+                    if dist_sq < 144: # Rango de caza de 12 píxeles
+                        presa_objetivo._esta_vivo = False
+                        ecosistema.agregar_carcasa(presa_objetivo.x, presa_objetivo.y)
+                        self._energia = min(self.max_energia, self._energia + 75) # Aumentar energía por caza
+                        self.objetivo = None # Cazó, buscar otra cosa que hacer
+                        return f"{self.nombre} cazó a {presa_objetivo.nombre}."
 
         return ""
     
@@ -395,7 +566,7 @@ class Omnivoro(Animal):
         es_tamano_adecuado = self.max_energia >= presa.max_energia * 0.9
         return (presa is not self and es_presa_valida and es_tamano_adecuado and presa.esta_vivo and self.energia > 30)
 
-    def beber(self, ecosistema) -> str:
+    def beber(self, ecosistema: 'Ecosistema') -> str:
         if self._sed > 50:
             for rio in ecosistema.terreno["rios"]:
                 if rio.rect.collidepoint(self.x, self.y):
@@ -527,6 +698,7 @@ class Ecosistema:
         self.clima_actual = "Normal"
 
         self.animales_nuevos = []
+        self.hierba_cambio = False # Flag para optimización de renderizado
 
         self.grid_animales = {}  # Diccionario para optimizar la búsqueda de animales cercanos
 
@@ -622,8 +794,8 @@ class Ecosistema:
 
     def _rescate_extincion(self):
         """
-        Si una especie se extingue, reintroduce un pequeño número de individuos
-        para simular inmigración y evitar un colapso total.
+        Si una especie se extingue, hay una baja probabilidad diaria de que
+        un pequeño grupo inmigre para evitar un colapso total.
         """
         # No ejecutar si no hay animales en absoluto
         if not self.animales:
@@ -631,10 +803,10 @@ class Ecosistema:
 
         for tipo_animal in self.tipos_de_animales:
             conteo = sum(1 for a in self.animales if isinstance(a, tipo_animal))
-            if conteo == 0:
-                print(f"¡Rescate anti-extinción! Reintroduciendo {tipo_animal.__name__}.")
-                for _ in range(4): # Reintroducir 4 individuos
-                    self.agregar_animal(tipo_animal)
+            if conteo == 0 and random.random() < 0.10: # 10% de probabilidad de rescate por día
+                print(f"¡Inmigración afortunada! Un pequeño grupo de {tipo_animal.__name__} ha llegado.")
+                for _ in range(2): # Reintroducir un grupo más pequeño
+                    self.agregar_animal(tipo_animal, es_rescate=True)
 
     def simular_hora(self):
         self._actualizar_grid_animales()
@@ -644,9 +816,7 @@ class Ecosistema:
         random.shuffle(self.animales)
         for animal in self.animales:
             if animal.esta_vivo:
-                animal.comer(self)
-                animal.beber(self)
-                animal.moverse(self)
+                animal.moverse(self) # La lógica de comer y beber ahora está dentro de moverse()
 
         for rio in self.terreno["rios"]:
             for pez in rio.peces:
@@ -674,8 +844,11 @@ class Ecosistema:
                     if pradera_actual:
                         max_capacidad = pradera_actual.max_hierba
                         tasa_crecimiento_base = pradera_actual.tasa_crecimiento
-                    self.grid_hierba[gx][gy] += int(tasa_crecimiento_base * factor_crecimiento)
+                    # El crecimiento ahora depende de la hierba existente (sobrepastoreo)
+                    crecimiento_real = int(tasa_crecimiento_base * factor_crecimiento * (self.grid_hierba[gx][gy] / max_capacidad))
+                    self.grid_hierba[gx][gy] += crecimiento_real
                     self.grid_hierba[gx][gy] = min(self.grid_hierba[gx][gy], max_capacidad)
+            self.hierba_cambio = True # La hierba creció, necesita redibujarse
             
             for selva in self.terreno["selvas"]: selva.crecer_recursos(factor_crecimiento)
             for rio in self.terreno["rios"]: rio.crecer_recursos(factor_crecimiento)
@@ -697,15 +870,18 @@ class Ecosistema:
         # Al final del día, comprobar si alguna especie se ha extinguido
         if self.hora_actual == 0: self._rescate_extincion()
 
-    def agregar_animal(self, tipo_animal, nombre=None):
+    def agregar_animal(self, tipo_animal, nombre=None, es_rescate=False):
         if nombre is None:
             nombre = f"{tipo_animal.__name__} {getattr(tipo_animal, 'contador', 0) + 1}"
 
-        while True:
+        # Si es un rescate, buscar una posición válida en cualquier lugar.
+        # Si es añadido por el usuario, puede aparecer en cualquier lugar no-obstáculo.
+        intentos = 0
+        while intentos < 100:
             x = random.randint(20, SIM_WIDTH - 20)
             y = random.randint(20, SCREEN_HEIGHT - 20)
-            if not self.choca_con_terreno(x, y):
-                break
+            if not self.choca_con_terreno(x, y): break
+            intentos += 1
         nuevo_animal = tipo_animal(nombre, x, y)
         self.animales.append(nuevo_animal)
 
@@ -749,6 +925,10 @@ class Ecosistema:
             tipo_clase = tipos.get(a_data["tipo"])
             if tipo_clase:
                 # Corrección: Usar .get() con un valor por defecto para max_energia para evitar errores al cargar partidas antiguas
-                animal = tipo_clase(a_data["nombre"], a_data["x"], a_data["y"], a_data["edad"], a_data["energia"], max_energia=a_data.get("max_energia", 100))
+                max_energia_default = max(80, min(120, 100 + random.randint(-10, 10)))
+                animal = tipo_clase(a_data["nombre"], a_data["x"], a_data["y"], 
+                                    a_data.get("edad", 0), a_data.get("energia", 100), 
+                                    max_energia=a_data.get("max_energia", max_energia_default))
                 animal._sed = a_data.get("sed", 0)
+                animal.estado = a_data.get("estado", "deambulando")
                 self.animales.append(animal)

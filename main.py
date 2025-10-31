@@ -73,6 +73,9 @@ class PygameView:
         self.graph = PopulationGraph(SIM_WIDTH + 10, SCREEN_HEIGHT - 350, UI_WIDTH - 20, 120, self.font_small)
         self.mouse_pos = None
 
+        # Superficie para el renderizado optimizado de la hierba
+        self.hierba_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+
     def _load_sprites(self):
         sprites = {}
         sprite_definitions = {
@@ -144,30 +147,32 @@ class PygameView:
         textrect.topleft = (x, y)
         surface.blit(textobj, textrect)
 
-    def _draw_hierba(self, ecosistema):
+    def update_hierba_surface(self, ecosistema):
+        """Actualiza la superficie de la hierba. Llamar solo cuando la hierba cambia."""
+        self.hierba_surface.fill((0, 0, 0, 0)) # Limpiar la superficie
         if self.sprites and "hierba" in self.sprites:
             sprite_hierba = self.sprites["hierba"]
             for gx in range(ecosistema.grid_width):
                 for gy in range(ecosistema.grid_height):
                     nivel_hierba = ecosistema.grid_hierba[gx][gy]
                     if nivel_hierba > 0:
-                        pos_x = gx * CELL_SIZE
-                        pos_y = gy * CELL_SIZE
                         alpha = int(255 * (nivel_hierba / MAX_HIERBA_PRADERA))
                         sprite_hierba.set_alpha(alpha)
-                        self.screen.blit(sprite_hierba, (pos_x, pos_y))
+                        self.hierba_surface.blit(sprite_hierba, (gx * CELL_SIZE, gy * CELL_SIZE))
         else:
             # Método alternativo si no hay sprite
             for gx in range(ecosistema.grid_width):
                 for gy in range(ecosistema.grid_height):
                     nivel_hierba = ecosistema.grid_hierba[gx][gy]
                     if nivel_hierba > 0:
-                        max_val = MAX_HIERBA_PRADERA
-                        intensidad = min(1.0, nivel_hierba / max_val)
+                        # Determinar el máximo local (pradera o normal)
+                        es_pradera = any(p.rect.collidepoint(gx * CELL_SIZE, gy * CELL_SIZE) for p in ecosistema.terreno["praderas"])
+                        max_local = MAX_HIERBA_PRADERA if es_pradera else 70 # MAX_HIERBA_NORMAL
+                        intensidad = min(1.0, nivel_hierba / max_local)
                         color_base = list(COLOR_SIM_AREA)
                         color_hierba = (34, 139, 34)
                         color_final = tuple([int(color_base[i] * (1 - intensidad) + color_hierba[i] * intensidad) for i in range(3)])
-                        pygame.draw.rect(self.screen, color_final, (gx * CELL_SIZE, gy * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+                        pygame.draw.rect(self.hierba_surface, color_final, (gx * CELL_SIZE, gy * CELL_SIZE, CELL_SIZE, CELL_SIZE))
     
     def _draw_terreno(self, ecosistema):
         for selva in ecosistema.terreno["selvas"]:
@@ -223,17 +228,21 @@ class PygameView:
                 if sprite:
                     self.screen.blit(sprite, (sprite_pos_x, sprite_pos_y))
                 
+                # --- Barra de energía centrada ---
                 bar_width = 15
                 bar_height = 4
-                bar_x = sprite_pos_x
-                bar_y = sprite_pos_y - bar_height - 2
+                bar_x = animal.x - bar_width // 2
+                bar_y = sprite_pos_y - bar_height - 2 # Posicionar la barra sobre el sprite
 
                 max_energia = animal.max_energia or 100
                 energia_percent = max(0, animal.energia) / max_energia
                 pygame.draw.rect(self.screen, (0,0,0), (bar_x-1, bar_y-1, bar_width+2, bar_height+2))
                 pygame.draw.rect(self.screen, (90, 90, 90), (bar_x, bar_y, bar_width, bar_height))
                 pygame.draw.rect(self.screen, (0, 255, 0), (bar_x, bar_y, bar_width * energia_percent, bar_height))
-
+                
+                # --- Indicador de estado de huida ---
+                if animal.estado == "huyendo":
+                    self._draw_text("!", self.font_normal, (255, 255, 0), self.screen, animal.x - 4, bar_y - 15)
         else:
             for animal in ecosistema.animales:
                 color = (0,0,0)
@@ -263,6 +272,7 @@ class PygameView:
                 f"Tipo: {animal_seleccionado.__class__.__name__}",
                 f"Energía: {animal_seleccionado.energia}/{animal_seleccionado.max_energia}",
                 f"Sed: {animal_seleccionado._sed}/150",
+                f"Estado: {animal_seleccionado.estado}",
                 f"Edad: {animal_seleccionado.edad}"
             ]
             for line in info:
@@ -300,7 +310,7 @@ class PygameView:
     def draw_simulation(self, ecosistema, sim_over, animal_seleccionado, sim_speed):
         self.screen.fill(COLOR_BACKGROUND)
         pygame.draw.rect(self.screen, COLOR_SIM_AREA, (0, 0, SIM_WIDTH, SCREEN_HEIGHT))
-        self._draw_hierba(ecosistema)
+        self.screen.blit(self.hierba_surface, (0, 0)) # Dibujar la superficie de hierba pre-renderizada
         self._draw_terreno(ecosistema)
         self._draw_decoraciones(ecosistema)
         self._draw_recursos(ecosistema)
@@ -384,6 +394,7 @@ class SimulationController:
         
         # Actualizar el gráfico una vez al final del día avanzado
         self._actualizar_grafico()
+        self.view.update_hierba_surface(self.ecosistema) # Actualizar hierba después del crecimiento
         return self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales
     
     def _avanzar_hora(self):
@@ -396,22 +407,20 @@ class SimulationController:
         self.view.graph.update(poblaciones)
 
         self.ecosistema.simular_hora()
+        # Si la hierba cambió (porque un animal comió), actualizar la superficie
+        if self.ecosistema.hierba_cambio:
+            self.view.update_hierba_surface(self.ecosistema)
+            self.ecosistema.hierba_cambio = False
         if self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales:
             return True
         return False
 
     def _setup_button_actions(self):
-        # Mapear nombres de animales a sus clases para facilitar la configuración de botones
+        """Crea un diccionario que mapea nombres de botones a sus funciones."""
         animal_map = {
             "conejo": Conejo, "raton": Raton, "cabra": Cabra,
             "leopardo": Leopardo, "gato": Gato, "halcon": Halcon,
             "cerdo": Cerdo, "mono": Mono, "insecto": Insecto
-        }
-
-        # Crear acciones para añadir cada animal
-        add_animal_actions = {
-            f"add_{name}": lambda species=cls: self.ecosistema.agregar_animal(species)
-            for name, cls in animal_map.items()
         }
 
         self.button_actions = {
@@ -422,10 +431,16 @@ class SimulationController:
             "next_day": self._action_advance_day,
             "restart": self._action_restart
         }
+        
+        # Añadir dinámicamente las acciones para agregar animales
+        for name, cls in animal_map.items():
+            # Usamos una función lambda con un argumento por defecto para "capturar"
+            # el valor de 'cls' en cada iteración.
+            self.button_actions[f"add_{name}"] = lambda species=cls: self.ecosistema.agregar_animal(species)
 
     def _action_save(self): self.ecosistema.guardar_estado()
     def _action_load(self):
-        try: self.ecosistema.cargar_estado(); self.view.graph.history = []
+        try: self.ecosistema.cargar_estado(); self.view.graph.history = []; self.view.update_hierba_surface(self.ecosistema)
         except FileNotFoundError: print("¡No se encontró guardado!")
 
     def _action_restart(self):
@@ -434,6 +449,7 @@ class SimulationController:
         self._poblar_ecosistema()
         self.view.graph.history.clear()
         self.animal_seleccionado = None
+        self.view.update_hierba_surface(self.ecosistema)
         self.paused = True
     def _action_toggle_pause(self): self.paused = not self.paused
     def _action_advance_day(self):
@@ -445,6 +461,7 @@ class SimulationController:
 
     def run(self):
         self._poblar_ecosistema()
+        self.view.update_hierba_surface(self.ecosistema) # Renderizado inicial de la hierba
         
         running = True
         sim_over = False
@@ -464,54 +481,54 @@ class SimulationController:
                 if self.animal_seleccionado and not self.animal_seleccionado.esta_vivo:
                     self.animal_seleccionado = None
 
-            # Manejo de eventos
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        running = False
-                    elif event.key == pygame.K_m:
-                        try:
-                            self.view.toggle_music()
-                        except Exception as e:
-                            print(f"Error al alternar música desde teclado: {e}")
-                if event.type == pygame.MOUSEMOTION:
-                    self.view.mouse_pos = event.pos
-                
-                if event.type == pygame.MOUSEBUTTONUP:
-                    if event.button == 1:
-                        self.holding_next_day = False
-                elif event.type == pygame.MOUSEBUTTONDOWN and not sim_over:
-                    pos = pygame.mouse.get_pos()
-                    clicked_on_button = False
-                    for name, button in self.view.buttons.items():
-                        if button.rect.collidepoint(pos):
-                            action = self.button_actions.get(name)
-                            if action:
-                                result = action()
-                                if name == "next_day" or name == "restart":
-                                    sim_over = result
-                                    self.last_update_time = pygame.time.get_ticks()
-                                    self.holding_next_day = True
-                                    self.next_day_cooldown = 250
-                            clicked_on_button = True
-                            break
-                    if not clicked_on_button:
-                        # Bucle para encontrar el animal clickeado.
-                        # Iterar en reversa para seleccionar el que está dibujado encima.
-                        if pos[0] < SIM_WIDTH: # Solo seleccionar si el clic es en el área de simulación
-                            self.animal_seleccionado = None
-                            for animal in reversed(self.ecosistema.animales):
-                                # Usar un radio de clic un poco más grande para facilitar la selección
-                                dist_sq = (animal.x - pos[0])**2 + (animal.y - pos[1])**2
-                                if dist_sq < 12**2: # 12 píxeles de radio al cuadrado
-                                    self.animal_seleccionado = animal
-                                    break # Detenerse al encontrar el primero (el de más arriba)
+            # Manejo de eventos (refactorizado para mayor claridad)
+            running, sim_over = self.handle_events(running, sim_over)
 
             self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.sim_speed_multiplier)
     
         self.view.close()
+
+    def handle_events(self, running, sim_over):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                return False, sim_over
+            
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
+                self.view.toggle_music()
+
+            if event.type == pygame.MOUSEMOTION:
+                self.view.mouse_pos = event.pos
+
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and not sim_over:
+                pos = pygame.mouse.get_pos()
+                # Comprobar si se ha hecho clic en un botón
+                clicked_button_name = self.get_clicked_button(pos)
+                if clicked_button_name:
+                    action = self.button_actions.get(clicked_button_name)
+                    if action:
+                        result = action()
+                        if clicked_button_name in ["next_day", "restart"]:
+                            sim_over = result or sim_over
+                else:
+                    # Si no se hizo clic en un botón, comprobar si se hizo clic en un animal
+                    self.select_animal_at(pos)
+        return running, sim_over
+
+    def get_clicked_button(self, pos):
+        for name, button in self.view.buttons.items():
+            if button.rect.collidepoint(pos):
+                return name
+        return None
+
+    def select_animal_at(self, pos):
+        if pos[0] < SIM_WIDTH: # Solo seleccionar si el clic es en el área de simulación
+            self.animal_seleccionado = None
+            # Iterar en reversa para seleccionar el que está dibujado encima.
+            for animal in reversed(self.ecosistema.animales):
+                dist_sq = (animal.x - pos[0])**2 + (animal.y - pos[1])**2
+                if dist_sq < 12**2: # 12 píxeles de radio al cuadrado
+                    self.animal_seleccionado = animal
+                    break
 
 # --- Ejecución Principal ---
 

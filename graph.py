@@ -26,7 +26,7 @@ class PopulationGraph:
         title_surf = self.font.render("Población", True, (236, 240, 241))
         surface.blit(title_surf, (self.rect.x + 5, self.rect.y + 5))
 
-        # Dibujar la leyenda del gráfico
+        # Dibujar leyenda
         legend_y = self.rect.y + 20
         for pop_type, label in self.labels.items():
             label_surf = self.font.render(label, True, self.colors[pop_type])
@@ -36,8 +36,12 @@ class PopulationGraph:
         if not self.history:
             return
         
-        max_pop = max(max(p) for p in self.history if p) if any(self.history) else 1
-        if max_pop == 0: max_pop = 1
+        # Lógica optimizada y más segura para encontrar la población máxima
+        try:
+            # Usamos un generador y un valor por defecto de 1 para evitar errores con listas vacías
+            max_pop = max((max(p) for p in self.history if p), default=1)
+        except ValueError:
+            max_pop = 1 # Fallback por si acaso
 
         for i, pop_type in enumerate(["herb", "carn", "omni"]):
             points = []
