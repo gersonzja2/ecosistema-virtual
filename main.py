@@ -115,32 +115,25 @@ class PygameView:
         col3_x = col2_x + btn_width + spacing
         
         # Botones de control de velocidad
-        y_pos = SCREEN_HEIGHT - 225
-        buttons["pause_resume"] = Button(ui_x + margin, y_pos, (UI_WIDTH - 2*margin - spacing)/2, 35, "Pausa/Reanudar", COLOR_BUTTON, COLOR_TEXT)
-        buttons["next_day"] = Button(ui_x + margin + (UI_WIDTH - 2*margin - spacing)/2 + spacing, y_pos, (UI_WIDTH - 2*margin - spacing)/2, 35, "Adelantar Día", COLOR_BUTTON, COLOR_TEXT)
-
-        # Botones para añadir animales
-        y_pos = SCREEN_HEIGHT - 175
-        buttons["add_conejo"] = Button(col1_x, y_pos, btn_width, btn_height, "Añadir Conejo", COLOR_HERBIVORO, (0,0,0))
-        buttons["add_raton"] = Button(col2_x, y_pos, btn_width, btn_height, "Añadir Ratón", COLOR_HERBIVORO, (0,0,0))
-        buttons["add_cabra"] = Button(col3_x, y_pos, btn_width, btn_height, "Añadir Cabra", COLOR_HERBIVORO, (0,0,0))
-        y_pos += btn_height + spacing
-        buttons["add_leopardo"] = Button(col1_x, y_pos, btn_width, btn_height, "Añadir Leopardo", COLOR_CARNIVORO, COLOR_TEXT)
-        buttons["add_gato"] = Button(col2_x, y_pos, btn_width, btn_height, "Añadir Gato", COLOR_CARNIVORO, COLOR_TEXT)
-        buttons["add_halcon"] = Button(col3_x, y_pos, btn_width, btn_height, "Añadir Halcón", COLOR_CARNIVORO, COLOR_TEXT)
-        y_pos += btn_height + spacing
-        buttons["add_cerdo"] = Button(col1_x, y_pos, btn_width, btn_height, "Añadir Cerdo", COLOR_OMNIVORO, COLOR_TEXT)
-        buttons["add_mono"] = Button(col2_x, y_pos, btn_width, btn_height, "Añadir Mono", COLOR_OMNIVORO, COLOR_TEXT)
-        buttons["add_insecto"] = Button(col3_x, y_pos, btn_width, btn_height, "Añadir Insecto", COLOR_HERBIVORO, (0,0,0))
-
-        # Botones de gestión (Guardar, Cargar, Reiniciar, Música)
-        y_pos += btn_height + spacing + 5 # Espacio extra
-        buttons["save"] = Button(col1_x, y_pos, btn_width, btn_height, "Guardar", (0, 100, 0), COLOR_TEXT)
-        buttons["load"] = Button(col2_x, y_pos, btn_width, btn_height, "Cargar", (100, 100, 0), COLOR_TEXT)
-        buttons["restart"] = Button(col3_x, y_pos, btn_width, btn_height, "Reiniciar", (200, 50, 50), COLOR_TEXT)
-        y_pos += btn_height + spacing
+        control_y = SCREEN_HEIGHT - 225
+        buttons["pause_resume"] = Button(SIM_WIDTH + 10, control_y, 130, 35, "Pausa/Reanudar", COLOR_BUTTON, COLOR_TEXT)
+        buttons["next_day"] = Button(SIM_WIDTH + 150, control_y, 130, 35, "Adelantar Día", COLOR_BUTTON, COLOR_TEXT)
+        buttons["add_conejo"] = Button(col1_x, SCREEN_HEIGHT - 175, btn_width, btn_height, "Añadir Conejo", COLOR_HERBIVORO, (0,0,0))
+        buttons["add_raton"] = Button(col2_x, SCREEN_HEIGHT - 175, btn_width, btn_height, "Añadir Ratón", COLOR_HERBIVORO, (0,0,0))
+        buttons["add_cabra"] = Button(col3_x, SCREEN_HEIGHT - 175, btn_width, btn_height, "Añadir Cabra", COLOR_HERBIVORO, (0,0,0))
+        buttons["add_leopardo"] = Button(col1_x, SCREEN_HEIGHT - 135, btn_width, btn_height, "Añadir Leopardo", COLOR_CARNIVORO, COLOR_TEXT)
+        buttons["add_gato"] = Button(col2_x, SCREEN_HEIGHT - 135, btn_width, btn_height, "Añadir Gato", COLOR_CARNIVORO, COLOR_TEXT)
+        buttons["add_cerdo"] = Button(col1_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Cerdo", COLOR_OMNIVORO, COLOR_TEXT)
+        buttons["add_mono"] = Button(col2_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Mono", COLOR_OMNIVORO, COLOR_TEXT)
+        buttons["add_halcon"] = Button(col3_x, SCREEN_HEIGHT - 135, btn_width, btn_height, "Añadir Halcón", COLOR_CARNIVORO, COLOR_TEXT) # Ajuste de posición
+        buttons["add_insecto"] = Button(col3_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Insecto", COLOR_HERBIVORO, (0,0,0)) # Ajuste de posición
+        
+        btn_width_small, btn_height_small = 90, 30
+        buttons["save"] = Button(SIM_WIDTH + 10, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Guardar", (0, 100, 0), COLOR_TEXT)
+        buttons["load"] = Button(SIM_WIDTH + 105, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Cargar", (100, 100, 0), COLOR_TEXT)
+        buttons["restart"] = Button(SIM_WIDTH + 200, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Reiniciar", (200, 50, 50), COLOR_TEXT)
         music_text = "Música: ON" if getattr(self, 'music_playing', False) else "Música: OFF"
-        buttons["music"] = Button(col1_x, y_pos, UI_WIDTH - 2*margin, btn_height, music_text, (80, 80, 80), COLOR_TEXT)
+        buttons["music"] = Button(SIM_WIDTH + 295, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, music_text, (80, 80, 80), COLOR_TEXT)
         return buttons
 
     def _draw_text(self, text, font, color, surface, x, y):
@@ -429,7 +422,11 @@ class SimulationController:
             "next_day": self._action_advance_day,
             "restart": self._action_restart
         }
-        self.button_actions.update(add_animal_actions)
+
+    def _action_save(self): self.ecosistema.guardar_estado()
+    def _action_load(self):
+        try: self.ecosistema.cargar_estado(); self.view.graph.history = []
+        except FileNotFoundError: print("¡No se encontró guardado!")
 
     def _action_restart(self):
         print("Reiniciando simulación...")
@@ -438,10 +435,6 @@ class SimulationController:
         self.view.graph.history.clear()
         self.animal_seleccionado = None
         self.paused = True
-    def _action_save(self): self.ecosistema.guardar_estado()
-    def _action_load(self):
-        try: self.ecosistema.cargar_estado(); self.view.graph.history = []
-        except FileNotFoundError: print("¡No se encontró el archivo de guardado!")
     def _action_toggle_pause(self): self.paused = not self.paused
     def _action_advance_day(self):
         if self.ecosistema.dia_total < self.dias_simulacion and self.ecosistema.animales:

@@ -109,8 +109,9 @@ class Selva(Terreno):
 class Pradera(Terreno):
     def __init__(self, rect):
         super().__init__(rect)
-        # Cada pradera tendrá una calidad de suelo diferente (ej: 0.8 = pobre, 1.5 = muy fértil)
-        self.calidad_suelo = random.uniform(0.8, 1.5)
+        self.max_hierba = MAX_HIERBA_PRADERA
+        self.tasa_crecimiento = 2
+        
 
 # --- Clases del Modelo ---
 
@@ -414,9 +415,9 @@ class Conejo(Herbivoro):
 class Cabra(Herbivoro):
     def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
         if max_energia is None:
-            max_energia = max(80, min(100, 90 + random.randint(-5, 5)))
+            max_energia = max(90, min(110, 100 + random.randint(-5, 5)))
         super().__init__(nombre, x, y, edad, energia, max_energia)
-
+        
 class Raton(Herbivoro):
     def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
         if max_energia is None:
@@ -439,30 +440,34 @@ class Leopardo(Carnivoro):
 class Gato(Carnivoro):
     def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
         if max_energia is None:
-            max_energia = max(70, min(90, 80 + random.randint(-10, 10))) # Menos energía que un Leopardo
+            max_energia = max(75, min(95, 85 + random.randint(-5, 5)))
         super().__init__(nombre, x, y, edad, energia, max_energia)
-
+        
 class Halcon(Carnivoro):
     def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
         if max_energia is None:
-            max_energia = max(60, min(80, 70 + random.randint(-5, 5))) # Ágil pero con menos reservas
+            max_energia = max(70, min(90, 80 + random.randint(-5, 5)))
         super().__init__(nombre, x, y, edad, energia, max_energia)
-
+        
 # --- Omnívoros ---
 class Cerdo(Omnivoro):
     def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
         if max_energia is None:
-            max_energia = max(90, min(110, 100 + random.randint(-5, 5))) # Robusto y con buena energía
+            max_energia = max(110, min(130, 120 + random.randint(-5, 5)))
         super().__init__(nombre, x, y, edad, energia, max_energia)
-
+        
 class Mono(Omnivoro):
     def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
         if max_energia is None:
-            max_energia = max(70, min(90, 80 + random.randint(-5, 5))) # Inteligente y con energía moderada
+            max_energia = max(80, min(100, 90 + random.randint(-5, 5)))
         super().__init__(nombre, x, y, edad, energia, max_energia)
-
+        
 class Ecosistema:
     def __init__(self):
+        # Lista de todas las clases de animales para el rescate anti-extinción
+        self.tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto]
+
+
         self.animales: list[Animal] = []
         self.terreno = {
             "praderas": [
@@ -505,11 +510,11 @@ class Ecosistema:
             for gy in range(self.grid_height):
                 max_val = MAX_HIERBA_NORMAL
                 if any(p.rect.collidepoint(gx * CELL_SIZE, gy * CELL_SIZE) for p in self.terreno["praderas"]):
-                    max_val = MAX_HIERBA_PRADERA
+                    max_val = MAX_HIERBA_PRADERA # Se mantiene para la inicialización aleatoria
                 self.grid_hierba[gx][gy] = random.randint(0, max_val)
 
         # --- Estaciones y Clima ---
-        self.dia_total = 0
+        self.dia_total = 1
         self.hora_actual = 0
         self.dias_por_estacion = 20
         self.estacion_actual = "Primavera"
@@ -615,6 +620,22 @@ class Ecosistema:
                     cercanos.extend(self.grid_animales[key])
         return cercanos
 
+    def _rescate_extincion(self):
+        """
+        Si una especie se extingue, reintroduce un pequeño número de individuos
+        para simular inmigración y evitar un colapso total.
+        """
+        # No ejecutar si no hay animales en absoluto
+        if not self.animales:
+            return
+
+        for tipo_animal in self.tipos_de_animales:
+            conteo = sum(1 for a in self.animales if isinstance(a, tipo_animal))
+            if conteo == 0:
+                print(f"¡Rescate anti-extinción! Reintroduciendo {tipo_animal.__name__}.")
+                for _ in range(4): # Reintroducir 4 individuos
+                    self.agregar_animal(tipo_animal)
+
     def simular_hora(self):
         self._actualizar_grid_animales()
 
@@ -647,33 +668,34 @@ class Ecosistema:
                     tasa_crecimiento_base = 1 
                     calidad_suelo_local = 1.0
                     max_capacidad = MAX_HIERBA_NORMAL
-
-                    # Comprobar si la celda está en una pradera y usar su calidad de suelo
-                    for pradera in self.terreno["praderas"]:
-                        if pradera.rect.collidepoint(gx * CELL_SIZE, gy * CELL_SIZE):
-                            tasa_crecimiento_base = 2 # Las praderas son inherentemente más rápidas para crecer hierba
-                            calidad_suelo_local = pradera.calidad_suelo
-                            max_capacidad = MAX_HIERBA_PRADERA
-                            break # Salimos del bucle una vez que encontramos la pradera
-
-                    tasa_crecimiento_final = tasa_crecimiento_base * calidad_suelo_local * factor_crecimiento
-                    self.grid_hierba[gx][gy] += int(tasa_crecimiento_final)
+                    tasa_crecimiento_base = 1
+                    
+                    pradera_actual = next((p for p in self.terreno["praderas"] if p.rect.collidepoint(gx * CELL_SIZE, gy * CELL_SIZE)), None)
+                    if pradera_actual:
+                        max_capacidad = pradera_actual.max_hierba
+                        tasa_crecimiento_base = pradera_actual.tasa_crecimiento
+                    self.grid_hierba[gx][gy] += int(tasa_crecimiento_base * factor_crecimiento)
                     self.grid_hierba[gx][gy] = min(self.grid_hierba[gx][gy], max_capacidad)
             
             for selva in self.terreno["selvas"]: selva.crecer_recursos(factor_crecimiento)
             for rio in self.terreno["rios"]: rio.crecer_recursos(factor_crecimiento)
 
             for c in self.recursos["carcasas"]: c.dias_descomposicion += 1
-            self.recursos["carcasas"] = [c for c in self.recursos["carcasas"] if c.energia_restante > 0 and c.dias_descomposicion < 5]
+            self.recursos["carcasas"] = [c for c in self.recursos["carcasas"] if c.dias_descomposicion < 5]
 
             self.animales_nuevos = []
             for animal in self.animales:
                 if animal.esta_vivo:
+                    # 1. Envejecimiento y posible muerte por edad/hambre
                     animal.envejecer(self)
+                    # 2. Reproducción si sobrevive y cumple condiciones
                     animal.reproducirse(self)
 
         self.animales = [animal for animal in self.animales if animal.esta_vivo]
         self.animales.extend(self.animales_nuevos)
+        
+        # Al final del día, comprobar si alguna especie se ha extinguido
+        if self.hora_actual == 0: self._rescate_extincion()
 
     def agregar_animal(self, tipo_animal, nombre=None):
         if nombre is None:
