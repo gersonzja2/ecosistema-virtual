@@ -192,7 +192,6 @@ class PygameView:
         if not self.agua_texturas:
             return
         current_time = pygame.time.get_ticks()
-        if current_time - self.ultimo_cambio_agua > self.tiempo_animacion_agua:
         time_per_frame = self.tiempo_animacion_agua
         if current_time - self.ultimo_cambio_agua > time_per_frame:
             self.ultimo_cambio_agua = current_time
@@ -210,35 +209,26 @@ class PygameView:
 
         # Dibujar terreno
         for selva in ecosistema.terreno["selvas"]:
-            pygame.draw.rect(self.screen, COLOR_SELVA, selva.rect)
             if self.terrain_textures.get("selva"):
                 self._draw_tiled_texture(self.screen, self.terrain_textures["selva"], selva.rect)
             else:
                 pygame.draw.rect(self.screen, COLOR_SELVA, selva.rect)
         for pradera in ecosistema.terreno["praderas"]:
-            pygame.draw.rect(self.screen, COLOR_PRADERA, pradera.rect)
             if self.terrain_textures.get("pradera"):
                 self._draw_tiled_texture(self.screen, self.terrain_textures["pradera"], pradera.rect)
             else:
                 pygame.draw.rect(self.screen, COLOR_PRADERA, pradera.rect)
         for montana in ecosistema.terreno["montanas"]:
-            pygame.draw.rect(self.screen, COLOR_MONTANA, montana.rect)
             if self.terrain_textures.get("montana"):
                 self._draw_tiled_texture(self.screen, self.terrain_textures["montana"], montana.rect)
             else:
                 pygame.draw.rect(self.screen, COLOR_MONTANA, montana.rect)
         for rio in ecosistema.terreno["rios"]:
             if self.agua_texturas:
-                textura_actual = self.agua_texturas[self.agua_frame_actual]
-                tex_w, tex_h = textura_actual.get_size()
-                for y in range(rio.rect.top, rio.rect.bottom, tex_h):
-                    for x in range(rio.rect.left, rio.rect.right, tex_w):
-                        self.screen.blit(textura_actual, (x, y))
-                self._draw_tiled_texture(self.screen, textura_actual, rio.rect)
+                self._draw_tiled_texture(self.screen, self.agua_texturas[self.agua_frame_actual], rio.rect)
             else:
                 pygame.draw.rect(self.screen, COLOR_RIO, rio.rect) # Fallback a color sólido
         for santuario in ecosistema.terreno["santuarios"]:
-            pygame.draw.rect(self.screen, COLOR_SANTUARIO, santuario.rect)
             if self.terrain_textures.get("santuario"):
                 self._draw_tiled_texture(self.screen, self.terrain_textures["santuario"], santuario.rect)
             else:
