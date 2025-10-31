@@ -26,7 +26,7 @@ class PopulationGraph:
         title_surf = self.font.render("Población", True, (236, 240, 241))
         surface.blit(title_surf, (self.rect.x + 5, self.rect.y + 5))
 
-        # Dibujar leyenda
+        # Dibujar la leyenda del gráfico
         legend_y = self.rect.y + 20
         for pop_type, label in self.labels.items():
             label_surf = self.font.render(label, True, self.colors[pop_type])
