@@ -175,28 +175,49 @@ class Animal(ABC):
 
     def decidir_proximo_paso(self, ecosistema: 'Ecosistema'):
         """El animal decide qué hacer en función de sus necesidades."""
+        # Prioridad 0: Si está comiendo o bebiendo, que termine.
+        if self.estado in ["comiendo", "bebiendo"]:
+            return
+
         # Prioridad 1: Beber si tiene mucha sed
-        if self._sed > 70 and self.estado != "buscando_agua":
+        if self._sed > 70 and self.estado not in ["buscando_agua"]:
             grid_x, grid_y = self.x // CELL_SIZE, self.y // CELL_SIZE
             rio_cercano = ecosistema.terrain_cache["rio"].get((grid_x, grid_y))
             if rio_cercano:
                 self.estado = "buscando_agua"
-                # Se dirige a un punto aleatorio dentro del río para evitar aglomeraciones
                 objetivo_x = random.randint(rio_cercano.rect.left, rio_cercano.rect.right)
                 objetivo_y = random.randint(rio_cercano.rect.top, rio_cercano.rect.bottom)
                 self.objetivo = self._validar_objetivo_coordenadas(objetivo_x, objetivo_y)
+                return
+
+        # Prioridad 2: Comer si tiene hambre
+        if self._energia < self.max_energia * 0.6 and self.estado not in ["buscando_comida"]:
+            if isinstance(self, Herbivoro):
+                objetivo_comida = self._encontrar_hierba_cercana(ecosistema)
+                if objetivo_comida:
+                    self.estado = "buscando_comida"
+                    self.objetivo = self._validar_objetivo_coordenadas(objetivo_comida[0], objetivo_comida[1])
+                    return
+
 
     def moverse(self, ecosistema: 'Ecosistema'):
         """Mueve al animal de forma semi-aleatoria, evitando bordes y obstáculos."""
         if self.objetivo:
+            objetivo_x, objetivo_y = 0, 0
+            # Maneja si el objetivo es otro animal (para el futuro) o coordenadas
+            if isinstance(self.objetivo, Animal):
+                objetivo_x, objetivo_y = self.objetivo.x, self.objetivo.y
+            else: # Asume que es una tupla de coordenadas (x, y)
+                objetivo_x, objetivo_y = self.objetivo
+
             # Movimiento dirigido hacia el objetivo
-            dx = self.objetivo[0] - self._x_float
-            dy = self.objetivo[1] - self._y_float
+            dx = objetivo_x - self._x_float
+            dy = objetivo_y - self._y_float
             distancia = math.sqrt(dx**2 + dy**2)
 
-            if distancia < self.velocidad:
+            # Considera que ha llegado si está muy cerca del objetivo
+            if distancia < max(self.velocidad, 5): # Usa un umbral un poco mayor que la velocidad
                 # Ha llegado al objetivo o muy cerca
-                self._x_float, self._y_float = self.objetivo
                 self.objetivo = None # Limpia el objetivo al llegar
             else:
                 self.direccion = math.atan2(dy, dx)
@@ -223,7 +244,32 @@ class Animal(ABC):
         return f"Animal: {self._nombre}, Tipo: {self.__class__.__name__}, Edad: {self._edad}, Energía: {self._energia}, Estado: {estado}"
 
 class Herbivoro(Animal):
+    def _encontrar_hierba_cercana(self, ecosistema, radio_busqueda=5):
+        """Busca la celda con más hierba en un radio determinado."""
+        mejor_celda = None
+        max_hierba = 10  # No se moverá por menos de esta cantidad
+
+        grid_x_base, grid_y_base = self.x // CELL_SIZE, self.y // CELL_SIZE
+
+        for dx in range(-radio_busqueda, radio_busqueda + 1):
+            for dy in range(-radio_busqueda, radio_busqueda + 1):
+                gx, gy = grid_x_base + dx, grid_y_base + dy
+                if 0 <= gx < ecosistema.grid_width and 0 <= gy < ecosistema.grid_height:
+                    if ecosistema.grid_hierba[gx][gy] > max_hierba:
+                        max_hierba = ecosistema.grid_hierba[gx][gy]
+                        mejor_celda = ((gx * CELL_SIZE) + CELL_SIZE // 2, (gy * CELL_SIZE) + CELL_SIZE // 2)
+        return mejor_celda
+
     def comer(self, ecosistema) -> str:
+        grid_x, grid_y = self.x // CELL_SIZE, self.y // CELL_SIZE
+        if ecosistema.grid_hierba[grid_x][grid_y] > 10:
+            cantidad_comida = min(ecosistema.grid_hierba[grid_x][grid_y], 20)
+            ecosistema.grid_hierba[grid_x][grid_y] -= cantidad_comida
+            self._energia = min(self.max_energia, self._energia + cantidad_comida * 0.5)
+            if self._energia >= self.max_energia:
+                self.estado = "deambulando"
+                self.objetivo = None # Limpia el objetivo al terminar de comer
+            return f"{self.nombre} está comiendo hierba."
         return ""
 
     def beber(self, ecosistema: 'Ecosistema') -> str:
@@ -527,6 +573,7 @@ class Ecosistema:
 
             animal.decidir_proximo_paso(self)
             animal.moverse(self)
+            animal.comer(self) # Intentará comer si está en la posición correcta
             animal.beber(self) # Intentará beber si está en la posición correcta
 
             animal._energia -= coste_energia_base

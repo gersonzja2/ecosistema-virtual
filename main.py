@@ -142,16 +142,17 @@ class PygameView:
             "planta": {"file": "planta_small.png", "size": (12, 12)},
             "hierba": {"file": "hierba.png", "size": (20, 20)}
         }
-        try:
-            for name, data in sprite_definitions.items():
+        for name, data in sprite_definitions.items():
+            try:
                 sprites[name] = pygame.transform.scale(pygame.image.load(f"assets/{data['file']}"), data['size'])
-            return sprites
-        except pygame.error as e:
-            print(f"\n--- ADVERTENCIA: No se encontraron los sprites ---")
-            print(f"Error: {e}.")
-            print("La simulación usará círculos de colores en lugar de imágenes.")
-            print("Para usar sprites, crea una carpeta 'assets' y coloca dentro los archivos .png de los animales (conejo.png, gato.png, etc.).\n")
-            return None
+            except (pygame.error, FileNotFoundError) as e:
+                print(f"ADVERTENCIA: No se pudo cargar el sprite '{data['file']}'. Se usará un marcador de posición si es necesario.")
+        
+        if not sprites:
+            print("\n--- ADVERTENCIA GENERAL: No se encontró ningún archivo de sprite en la carpeta 'assets' ---")
+            print("La simulación usará círculos de colores para todos los animales.")
+            print("Para usar sprites, asegúrate de que la carpeta 'assets' contenga los archivos .png correspondientes.\n")
+        return sprites
 
     def _load_terrain_textures(self):
         textures = {}
@@ -246,13 +247,15 @@ class PygameView:
 
     def _draw_animales(self, ecosistema, animal_seleccionado):
         if self.sprites:
-            for animal in ecosistema.animales:
-                sprite_pos_x = animal.x - 7
-                sprite_pos_y = animal.y - 7
-                sprite = self.sprites.get(animal.__class__.__name__)
-                if sprite:
-                    self.screen.blit(sprite, (sprite_pos_x, sprite_pos_y))
-
+            for animal in ecosistema.animales:                
+                sprite = self.sprites.get(animal.__class__.__name__) if self.sprites else None
+                if not sprite: # Si el sprite específico no se cargó, usa el círculo
+                    self._draw_fallback_animal(animal)
+                    continue
+                sprite_w, sprite_h = sprite.get_size()
+                sprite_pos_x = animal.x - sprite_w // 2
+                sprite_pos_y = animal.y - sprite_h // 2
+                self.screen.blit(sprite, (sprite_pos_x, sprite_pos_y))
         else:
             for animal in ecosistema.animales:
                 color = (0,0,0)
@@ -262,6 +265,13 @@ class PygameView:
                 pygame.draw.circle(self.screen, color, (int(animal.x), int(animal.y)), 7)
         if animal_seleccionado:
             pygame.draw.circle(self.screen, (255, 255, 0), (animal_seleccionado.x, animal_seleccionado.y), 10, 2)
+
+    def _draw_fallback_animal(self, animal):
+        color = (0,0,0)
+        if isinstance(animal, Herbivoro): color = COLOR_HERBIVORO
+        elif isinstance(animal, Carnivoro): color = COLOR_CARNIVORO
+        elif isinstance(animal, Omnivoro): color = COLOR_OMNIVORO
+        pygame.draw.circle(self.screen, color, (int(animal.x), int(animal.y)), 7)
 
     def _draw_ui(self, ecosistema, animal_seleccionado, sim_speed):
         ui_x = SIM_WIDTH + 10
@@ -466,13 +476,6 @@ class SimulationController:
         self.view.graph.update(poblaciones)
 
     def _avanzar_hora(self):
-        poblaciones = (
-            sum(1 for a in self.ecosistema.animales if isinstance(a, Herbivoro)),
-            sum(1 for a in self.ecosistema.animales if isinstance(a, Carnivoro)),
-            sum(1 for a in self.ecosistema.animales if isinstance(a, Omnivoro))
-        )
-        self.view.graph.update(poblaciones)
-
         self.ecosistema.simular_hora()
         if self.ecosistema.hierba_cambio:
             self.view.update_hierba_surface(self.ecosistema)
@@ -480,6 +483,8 @@ class SimulationController:
         if self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales:
             return True
         return False
+        if self.ecosistema.hora_actual == 0:
+            self._actualizar_grafico()
 
     def _setup_button_actions(self):
         animal_map = {
