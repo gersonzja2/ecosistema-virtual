@@ -676,8 +676,14 @@ class Ecosistema:
 
         for gx in range(self.grid_width):
             for gy in range(self.grid_height):
+                cell_rect = pygame.Rect(gx * CELL_SIZE, gy * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                # --- CORRECCIÓN: Usar colliderect para una detección precisa ---
+                if any(rio.rect.colliderect(cell_rect) for rio in self.terreno["rios"]):
+                    self.grid_hierba[gx][gy] = 0
+                    continue
+
                 max_val = MAX_HIERBA_NORMAL
-                if any(p.rect.collidepoint(gx * CELL_SIZE, gy * CELL_SIZE) for p in self.terreno["praderas"]):
+                if any(p.rect.colliderect(cell_rect) for p in self.terreno["praderas"]):
                     max_val = MAX_HIERBA_PRADERA # Se mantiene para la inicialización aleatoria
                 self.grid_hierba[gx][gy] = random.randint(0, max_val)
 
@@ -831,14 +837,20 @@ class Ecosistema:
 
             for gx in range(self.grid_width):
                 for gy in range(self.grid_height):
+                    cell_rect = pygame.Rect(gx * CELL_SIZE, gy * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                    # --- CORRECCIÓN: Usar colliderect para una detección precisa ---
+                    if any(rio.rect.colliderect(cell_rect) for rio in self.terreno["rios"]):
+                        self.grid_hierba[gx][gy] = 0
+                        continue
+
                     # Por defecto, el crecimiento es normal
                     tasa_crecimiento_base = 1 
                     calidad_suelo_local = 1.0
                     max_capacidad = MAX_HIERBA_NORMAL
                     tasa_crecimiento_base = 1
                     
-                    pradera_actual = next((p for p in self.terreno["praderas"] if p.rect.collidepoint(gx * CELL_SIZE, gy * CELL_SIZE)), None)
-                    if pradera_actual:
+                    pradera_actual = next((p for p in self.terreno["praderas"] if p.rect.colliderect(cell_rect)), None)
+                    if pradera_actual: # No es necesario comprobar si choca con el río aquí, ya se hizo arriba
                         max_capacidad = pradera_actual.max_hierba
                         tasa_crecimiento_base = pradera_actual.tasa_crecimiento
                     # El crecimiento ahora depende de la hierba existente (sobrepastoreo)
