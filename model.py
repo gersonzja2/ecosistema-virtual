@@ -111,6 +111,8 @@ class Animal(ABC):
         self._y_float = float(y)
         self._edad = max(0, edad)
         self._sed = 0
+        self.velocidad = 1.0 + random.uniform(-0.2, 0.2)
+        self.direccion = random.uniform(0, 2 * math.pi)
         if max_energia is None:
             max_energia = max(80, min(120, 100 + random.randint(-10, 10)))
         self.max_energia = max_energia
@@ -159,49 +161,62 @@ class Animal(ABC):
         valid_y = max(BORDE_MARGEN, min(y, SCREEN_HEIGHT - 1 - BORDE_MARGEN))
         return (valid_x, valid_y)
 
-    def _decidir_proximo_paso(self, ecosistema: 'Ecosistema'):
-        """Toda la lógica de decisión ha sido eliminada."""
-        pass
-
-    def moverse(self, ecosistema: 'Ecosistema') -> str:
-        """Toda la lógica de movimiento ha sido eliminada."""
-        return ""
-
-    def _encontrar_hierba_cercana(self, ecosistema):
-        return None
-
-    def _encontrar_presa_cercana(self, ecosistema):
-        return None, float('inf')
-
-    def _encontrar_depredador_cercano(self, ecosistema):
-        """Busca depredadores cercanos que puedan cazar a este animal."""
-        return None
-
-    def _encontrar_rio_cercano(self, ecosistema):
-        return None
-
-    def _encontrar_selva_cercana(self, ecosistema):
-        return None, float('inf')
-
-    def envejecer(self, ecosistema: 'Ecosistema') -> str:
-        """El animal ya no envejece ni pierde energía."""
-        return ""
-
     def verificar_estado(self, ecosistema: 'Ecosistema') -> str:
-        if self._esta_vivo and (
-            self._energia <= 0 or 
-            self._sed >= 150 or  # Límite de sed para morir
-            self._edad > 365 or
-            not 0 <= self.x < SIM_WIDTH or 
-            not 0 <= self.y < SCREEN_HEIGHT
-        ):
+        """Verifica si el animal debe morir por sed, hambre o vejez."""
+        if not self._esta_vivo:
+            return ""
+
+        if self._energia <= 0 or self._sed >= 150 or self._edad > 365:
             self._esta_vivo = False
             ecosistema.agregar_carcasa(self.x, self.y)
-            return f" -> ¡{self._nombre} ha muerto!"
+            mensaje = "hambre" if self._energia <= 0 else "sed" if self._sed >= 150 else "vejez"
+            return f" -> ¡{self._nombre} ha muerto de {mensaje}!"
         return ""
 
-    def reproducirse(self, ecosistema: 'Ecosistema') -> str:
-        return ""
+    def decidir_proximo_paso(self, ecosistema: 'Ecosistema'):
+        """El animal decide qué hacer en función de sus necesidades."""
+        # Prioridad 1: Beber si tiene mucha sed
+        if self._sed > 70 and self.estado != "buscando_agua":
+            grid_x, grid_y = self.x // CELL_SIZE, self.y // CELL_SIZE
+            rio_cercano = ecosistema.terrain_cache["rio"].get((grid_x, grid_y))
+            if rio_cercano:
+                self.estado = "buscando_agua"
+                # Se dirige a un punto aleatorio dentro del río para evitar aglomeraciones
+                objetivo_x = random.randint(rio_cercano.rect.left, rio_cercano.rect.right)
+                objetivo_y = random.randint(rio_cercano.rect.top, rio_cercano.rect.bottom)
+                self.objetivo = self._validar_objetivo_coordenadas(objetivo_x, objetivo_y)
+
+    def moverse(self, ecosistema: 'Ecosistema'):
+        """Mueve al animal de forma semi-aleatoria, evitando bordes y obstáculos."""
+        if self.objetivo:
+            # Movimiento dirigido hacia el objetivo
+            dx = self.objetivo[0] - self._x_float
+            dy = self.objetivo[1] - self._y_float
+            distancia = math.sqrt(dx**2 + dy**2)
+
+            if distancia < self.velocidad:
+                # Ha llegado al objetivo o muy cerca
+                self._x_float, self._y_float = self.objetivo
+                self.objetivo = None # Limpia el objetivo al llegar
+            else:
+                self.direccion = math.atan2(dy, dx)
+        else:
+            # Movimiento deambulante (aleatorio)
+            if random.random() < 0.05: # 5% de probabilidad de cambiar de dirección
+                self.direccion += random.uniform(-0.5, 0.5)
+
+        nuevo_x = self._x_float + math.cos(self.direccion) * self.velocidad
+        nuevo_y = self._y_float + math.sin(self.direccion) * self.velocidad
+
+        # Lógica de rebote en los bordes y obstáculos
+        if not (BORDE_MARGEN < nuevo_x < SIM_WIDTH - BORDE_MARGEN) or ecosistema.choca_con_terreno(nuevo_x, self._y_float):
+            self.direccion = math.pi - self.direccion # Rebote horizontal
+        if not (BORDE_MARGEN < nuevo_y < SCREEN_HEIGHT - BORDE_MARGEN) or ecosistema.choca_con_terreno(self._x_float, nuevo_y):
+            self.direccion = -self.direccion # Rebote vertical
+
+        # Aplicar el movimiento validado
+        self._x_float += math.cos(self.direccion) * self.velocidad
+        self._y_float += math.sin(self.direccion) * self.velocidad
 
     def __str__(self):
         estado = "Vivo" if self._esta_vivo else "Muerto"
@@ -212,26 +227,38 @@ class Herbivoro(Animal):
         return ""
 
     def beber(self, ecosistema: 'Ecosistema') -> str:
+        grid_x, grid_y = self.x // CELL_SIZE, self.y // CELL_SIZE
+        if ecosistema.is_river[grid_x][grid_y]:
+            self._sed = 0
+            self.estado = "deambulando"
+            self.objetivo = None
+            return f"{self.nombre} ha bebido agua."
         return ""
 
 class Carnivoro(Animal):
     def comer(self, ecosistema) -> str:
         return ""
 
-    def _puede_cazar(self, presa):
-        return False
-
     def beber(self, ecosistema: 'Ecosistema') -> str:
+        grid_x, grid_y = self.x // CELL_SIZE, self.y // CELL_SIZE
+        if ecosistema.is_river[grid_x][grid_y]:
+            self._sed = 0
+            self.estado = "deambulando"
+            self.objetivo = None
+            return f"{self.nombre} ha bebido agua."
         return ""
 
 class Omnivoro(Animal):
     def comer(self, ecosistema) -> str:
         return ""
-    
-    def _puede_cazar(self, presa):
-        return False
 
     def beber(self, ecosistema: 'Ecosistema') -> str:
+        grid_x, grid_y = self.x // CELL_SIZE, self.y // CELL_SIZE
+        if ecosistema.is_river[grid_x][grid_y]:
+            self._sed = 0
+            self.estado = "deambulando"
+            self.objetivo = None
+            return f"{self.nombre} ha bebido agua."
         return ""
 
 class Conejo(Herbivoro):
@@ -493,6 +520,21 @@ class Ecosistema:
             for pez in rio.peces:
                 pez.moverse()
 
+        # --- LÓGICA DE COMPORTAMIENTO BÁSICO DE ANIMALES ---
+        coste_energia_base = self.estaciones[self.estacion_actual]['coste_energia']
+        for animal in self.animales:
+            if not animal.esta_vivo: continue
+
+            animal.decidir_proximo_paso(self)
+            animal.moverse(self)
+            animal.beber(self) # Intentará beber si está en la posición correcta
+
+            animal._energia -= coste_energia_base
+            animal._sed += 0.5
+
+            animal.verificar_estado(self)
+        # -----------------------------------------------------
+
         if self.hora_actual >= 24:
             self.hora_actual = 0
             self.dia_total += 1
@@ -529,6 +571,9 @@ class Ecosistema:
 
             for c in self.recursos["carcasas"]: c.dias_descomposicion += 1
             self.recursos["carcasas"] = [c for c in self.recursos["carcasas"] if c.dias_descomposicion < 5]
+
+            for animal in self.animales:
+                animal._edad += 1
 
             self.animales_nuevos = []
 
