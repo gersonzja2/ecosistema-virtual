@@ -3,6 +3,63 @@ import pygame
 import json
 import math
 import random
+import os
+# === BEGIN SOUNDBANK ===
+class SoundBank:
+    """
+    Carga perezosa/cache de 3 sonidos por especie:
+    1=aparece, 2=camina, 3=muere
+    Busca en 'assets' y 'assets/Sonidos listos'.
+    """
+    _cache = {}
+    _folders = ["assets", os.path.join("assets", "Sonidos listos")]
+
+    # Mapa nombre de clase -> prefijo de archivo
+    _alias = {
+        "Cabra": "cabra",
+        "Raton": "rata",      # clase Raton usa archivos "rata X.wav"
+        "Halcon": "halcon",
+        "Leopardo": "leopardo",
+        "Conejo": "conejo",
+        "Cerdo": "cerdo",
+        "Mono": "mono",
+        "Gato": "gato",
+    }
+
+    @classmethod
+    def _find_file(cls, base, idx):
+        candidates = [f"{base} {idx}.wav", f"{base}{idx}.wav", f"{base}_{idx}.wav"]
+        for folder in cls._folders:
+            for name in candidates:
+                path = os.path.join(folder, name)
+                if os.path.isfile(path):
+                    return path
+        return None
+
+    @classmethod
+    def get_for(cls, class_name):
+        if class_name not in cls._alias:
+            return [None, None, None]
+        key = cls._alias[class_name]
+        if key in cls._cache:
+            return cls._cache[key]
+
+        sounds = [None, None, None]
+        if pygame.mixer.get_init():
+            for i in (1, 2, 3):
+                path = cls._find_file(key, i)
+                if path:
+                    try:
+                        s = pygame.mixer.Sound(path)
+                        s.set_volume(0.65)  # volumen base
+                        sounds[i-1] = s
+                    except Exception as e:
+                        print(f"[SoundBank] No se pudo cargar {path}: {e}")
+                        sounds[i-1] = None
+        cls._cache[key] = sounds
+        return sounds
+# === END SOUNDBANK ===
+
 
 # --- Constantes de la Simulación ---
 SIM_WIDTH = 800
@@ -133,12 +190,30 @@ class Animal(ABC):
         self._esta_vivo = True
         self.estado = "deambulando" # Estados: deambulando, buscando_comida, buscando_agua, cazando, huyendo
         self.objetivo = None  # Puede ser una tupla (x,y) o un objeto Animal
+                # === BEGIN AUDIO FIELDS ===
+        self.sonidos = SoundBank.get_for(type(self).__name__)
+        self._last_walk_tick = 0
+        # === END AUDIO FIELDS ===
+
         
         type(self).contador = getattr(type(self), 'contador', 0) + 1
 
     @property
     def nombre(self):
         return self._nombre
+    def reproducir_sonido(self, tipo: int, volume: float = 1.0):
+        """tipo: 1=aparece, 2=camina, 3=muere"""
+        if 1 <= tipo <= 3 and self.sonidos and pygame.mixer.get_init():
+            snd = self.sonidos[tipo-1] if len(self.sonidos) >= tipo else None
+            if snd:
+                try:
+                    orig = snd.get_volume()
+                    snd.set_volume(max(0.0, min(1.0, orig * volume)))
+                    snd.play()
+                    snd.set_volume(orig)
+                except Exception as e:
+                    print("[Sound] Error al reproducir:", e)
+
 
     @property
     def x(self):
@@ -345,6 +420,13 @@ class Animal(ABC):
                 self._energia -= coste_movimiento
                 self._sed += 0.15
         # Se ha eliminado el sistema anti-atascos "push". La nueva lógica de generación de objetivos lo hace innecesario.
+                # Sonido de caminar (máx. uno cada 300 ms)
+        now = pygame.time.get_ticks() if pygame.get_init() else 0
+        if now - getattr(self, "_last_walk_tick", 0) > 300:
+            if self.estado in ("deambulando", "buscando_agua", "buscando_comida", "cazando", "huyendo"):
+                self.reproducir_sonido(2)
+                self._last_walk_tick = now
+
         return ""
 
     def _encontrar_hierba_cercana(self, ecosistema):
@@ -437,6 +519,8 @@ class Animal(ABC):
             not 0 <= self.y < SCREEN_HEIGHT
         ):
             self._esta_vivo = False
+            # Sonido de muerte
+            self.reproducir_sonido(3)
             ecosistema.agregar_carcasa(self.x, self.y)
             return f" -> ¡{self._nombre} ha muerto!"
         return ""
@@ -883,6 +967,10 @@ class Ecosistema:
             intentos += 1
         nuevo_animal = tipo_animal(nombre, x, y)
         self.animales.append(nuevo_animal)
+                # Sonido de aparición
+        if hasattr(nuevo_animal, "reproducir_sonido"):
+            nuevo_animal.reproducir_sonido(1)
+
 
     def guardar_estado(self, archivo="save_state.json"):
         estado = {

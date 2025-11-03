@@ -4,6 +4,18 @@ import math
 from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, Halcon, Insecto, CELL_SIZE, MAX_HIERBA_PRADERA, Rio, Pez
 from graph import PopulationGraph
 
+# === BEGIN AUDIO INIT ===
+# Reduce latencia y mejora estabilidad del mixer
+pygame.mixer.pre_init(44100, -16, 2, 512)
+pygame.init()
+try:
+    if not pygame.mixer.get_init():
+        pygame.mixer.init(44100, -16, 2, 512)
+    pygame.mixer.set_num_channels(32)  # varios sonidos simultáneos
+except Exception as e:
+    print("Aviso: no se pudo inicializar pygame.mixer:", e)
+# === END AUDIO INIT ===
+
 # --- Constantes para Pygame ---
 # Las constantes de la simulación (SIM_WIDTH, etc.) están ahora en model.py
 SCREEN_WIDTH = 1200
