@@ -1,5 +1,4 @@
 import pygame
-import random
 import math 
 from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, Halcon, Insecto, CELL_SIZE, MAX_HIERBA_PRADERA, Rio, Pez
 
@@ -125,6 +124,10 @@ class PygameView:
 
         # Superficie para el renderizado optimizado de la hierba
         self.hierba_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        # NUEVO: Superficie para el fondo estático (terreno, decoraciones)
+        self.background_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT))
+        # Flag para saber si el fondo estático necesita ser redibujado (ej. al cargar partida)
+        self.needs_static_redraw = True
 
     def _load_sprites(self):
         sprites = {}
@@ -223,35 +226,40 @@ class PygameView:
                         color_hierba = (34, 139, 34)
                         color_final = tuple([int(color_base[i] * (1 - intensidad) + color_hierba[i] * intensidad) for i in range(3)])
                         pygame.draw.rect(self.hierba_surface, color_final, (gx * CELL_SIZE, gy * CELL_SIZE, CELL_SIZE, CELL_SIZE))
-    
-    def _draw_terreno(self, ecosistema):
+
+    def _create_static_background(self, ecosistema):
+        """Dibuja todos los elementos estáticos en una superficie para optimizar el renderizado."""
+        self.background_surface.fill(COLOR_SIM_AREA)
+        
+        # --- Dibujo de auras de terreno ---
         for selva in ecosistema.terreno["selvas"]:
             aura_rect = selva.rect.inflate(10, 10)
             s = pygame.Surface(aura_rect.size, pygame.SRCALPHA)
             s.fill(COLOR_SELVA + (30,))
-            self.screen.blit(s, aura_rect.topleft)
+            self.background_surface.blit(s, aura_rect.topleft)
         for rio in ecosistema.terreno["rios"]:
             aura_rect = rio.rect.inflate(10, 10)
             s = pygame.Surface(aura_rect.size, pygame.SRCALPHA)
             s.fill(COLOR_RIO + (50,))
-            self.screen.blit(s, aura_rect.topleft)
+            self.background_surface.blit(s, aura_rect.topleft)
 
         # --- Dibujo principal del terreno ---
         for selva in ecosistema.terreno["selvas"]:
-            pygame.draw.rect(self.screen, COLOR_SELVA, selva.rect)
+            pygame.draw.rect(self.background_surface, COLOR_SELVA, selva.rect)
         for rio in ecosistema.terreno["rios"]:
-            pygame.draw.rect(self.screen, tuple(max(0, c-40) for c in COLOR_RIO), rio.rect, 3)
-            pygame.draw.rect(self.screen, COLOR_RIO, rio.rect)
+            pygame.draw.rect(self.background_surface, tuple(max(0, c-40) for c in COLOR_RIO), rio.rect, 3)
+            pygame.draw.rect(self.background_surface, COLOR_RIO, rio.rect)
 
-    def _draw_decoraciones(self, ecosistema):
+        # --- Dibujo de decoraciones ---
         if self.sprites and "arbol" in self.sprites:
             for x, y in ecosistema.terreno["arboles"]:
                 sprite = self.sprites["arbol"]
-                self.screen.blit(sprite, (x - sprite.get_width() // 2, y - sprite.get_height() // 2))
+                self.background_surface.blit(sprite, (x - sprite.get_width() // 2, y - sprite.get_height() // 2))
         if self.sprites and "planta" in self.sprites:
             for x, y in ecosistema.terreno["plantas"]:
                 sprite = self.sprites["planta"]
-                self.screen.blit(sprite, (x - sprite.get_width() // 2, y - sprite.get_height() // 2))
+                self.background_surface.blit(sprite, (x - sprite.get_width() // 2, y - sprite.get_height() // 2))
+        self.needs_static_redraw = False
     
     def _draw_recursos(self, ecosistema):
         pez_sprite = self.sprites.get("Pez") if self.sprites else None
@@ -359,11 +367,14 @@ class PygameView:
 
     def draw_simulation(self, ecosistema, sim_over, animal_seleccionado, sim_speed):
         self.screen.fill(COLOR_BACKGROUND)
-        pygame.draw.rect(self.screen, COLOR_SIM_AREA, (0, 0, SIM_WIDTH, SCREEN_HEIGHT))
+        
+        if self.needs_static_redraw:
+            self._create_static_background(ecosistema)
+
+        self.screen.blit(self.background_surface, (0, 0))
         self.screen.blit(self.hierba_surface, (0, 0)) # Dibujar la superficie de hierba pre-renderizada
-        self._draw_terreno(ecosistema)
-        self._draw_decoraciones(ecosistema)
         self._draw_recursos(ecosistema)
+        
         self._draw_animales(ecosistema, animal_seleccionado)
         self._draw_ui(ecosistema, animal_seleccionado, sim_speed)
         if not sim_over:
@@ -425,7 +436,6 @@ class SimulationController:
         self.last_update_time = pygame.time.get_ticks()
         self.clock = pygame.time.Clock()
 
-        self.holding_next_day = False
         self.next_day_cooldown = 50  # Reducido para mejor respuesta
 
     def _poblar_ecosistema(self):
@@ -499,7 +509,7 @@ class SimulationController:
 
     def _action_save(self): self.ecosistema.guardar_estado()
     def _action_load(self):
-        try: self.ecosistema.cargar_estado(); self.view.graph.history = []; self.view.update_hierba_surface(self.ecosistema)
+        try: self.ecosistema.cargar_estado(); self.view.graph.history = []; self.view.update_hierba_surface(self.ecosistema); self.view.needs_static_redraw = True
         except FileNotFoundError: print("¡No se encontró guardado!")
 
     def _action_restart(self):
@@ -509,6 +519,7 @@ class SimulationController:
         self.view.graph.history.clear()
         self.animal_seleccionado = None
         self.view.update_hierba_surface(self.ecosistema)
+        self.view.needs_static_redraw = True
         self.paused = True
     def _action_toggle_pause(self): self.paused = not self.paused
     def _action_advance_day(self):

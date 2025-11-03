@@ -636,8 +636,6 @@ class Ecosistema:
     def __init__(self):
         # Lista de todas las clases de animales para el rescate anti-extinción
         self.tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto]
-
-
         self.animales: list[Animal] = []
         self.terreno = {
             "praderas": [
