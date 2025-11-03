@@ -1,0 +1,693 @@
+from abc import ABC, abstractmethod
+import pygame
+import json
+import math
+import random
+
+SIM_WIDTH = 800
+SCREEN_HEIGHT = 700
+
+CELL_SIZE = 20
+MAX_HIERBA_NORMAL = 70
+BORDE_MARGEN = 20 # Margen de seguridad para que los animales no se acerquen a los bordes
+MAX_HIERBA_PRADERA = 120
+
+class Terreno:
+    def __init__(self, rect):
+        self.rect = pygame.Rect(rect)
+
+class Carcasa:
+    def __init__(self, x, y, energia_restante=60):
+        self.x = x
+        self.y = y
+        self.energia_restante = energia_restante
+        self.dias_descomposicion = 0
+
+class Pez:
+    def __init__(self, x, y, rio=None):
+        self.x = x
+        self.y = y
+        self.rio = rio
+        self.energia = 50
+        self.fue_comido = False
+        self.velocidad = 1
+        self.direccion = random.uniform(0, 2 * math.pi)
+
+    def moverse(self):
+        if self.fue_comido:
+            return
+            
+        if random.random() < 0.05:
+            self.direccion += random.uniform(-0.3, 0.3)
+
+        nuevo_x = self.x + math.cos(self.direccion) * self.velocidad
+        nuevo_y = self.y + math.sin(self.direccion) * self.velocidad
+
+        if self.rio:
+            rect = self.rio.rect
+            nuevo_x = max(rect.left + 5, min(rect.right - 5, nuevo_x))
+            nuevo_y = max(rect.top + 5, min(rect.bottom - 5, nuevo_y))
+            
+            if nuevo_x in (rect.left + 5, rect.right - 5):
+                self.direccion = math.pi - self.direccion
+            if nuevo_y in (rect.top + 5, rect.bottom - 5):
+                self.direccion = -self.direccion
+
+        self.x = nuevo_x
+        self.y = nuevo_y
+
+class Rio(Terreno):
+    def __init__(self, rect):
+        super().__init__(rect)
+        self.max_peces = 20
+        self.peces = []
+        self._generar_peces_iniciales()
+
+    def _generar_peces_iniciales(self):
+        for _ in range(10):
+            x = random.randint(self.rect.left + 5, self.rect.right - 5)
+            y = random.randint(self.rect.top + 5, self.rect.bottom - 5)
+            pez = Pez(x, y, self)
+            self.peces.append(pez)
+
+    def crecer_recursos(self, factor_crecimiento):
+        if len(self.peces) < 50:
+            if random.random() < 0.1 * factor_crecimiento:
+                x = random.randint(self.rect.left + 5, self.rect.right - 5)
+                y = random.randint(self.rect.top + 5, self.rect.bottom - 5)
+                self.peces.append(Pez(x, y, self))
+
+    def actualizar(self):
+        for pez in self.peces:
+            pez.moverse()
+        
+        self.peces = [pez for pez in self.peces if not pez.fue_comido]
+        
+        if len(self.peces) < self.max_peces and random.random() < 0.1:
+            x = random.randint(self.rect.left + 5, self.rect.right - 5)
+            y = random.randint(self.rect.top + 5, self.rect.bottom - 5)
+            self.peces.append(Pez(x, y, self))
+
+class Selva(Terreno):
+    def __init__(self, rect):
+        super().__init__(rect)
+        self.bayas = 25
+
+    def crecer_recursos(self, factor_crecimiento):
+        self.bayas += int(3 * factor_crecimiento)
+
+class Pradera(Terreno):
+    def __init__(self, rect):
+        super().__init__(rect)
+        self.max_hierba = MAX_HIERBA_PRADERA
+        self.tasa_crecimiento = 2
+
+class Animal(ABC):
+    contador = 0
+
+    def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
+        self._nombre = nombre
+        self._x_float = float(x)
+        self._y_float = float(y)
+        self._edad = max(0, edad)
+        self._sed = 0
+        self.velocidad = 1.0 + random.uniform(-0.2, 0.2)
+        self.direccion = random.uniform(0, 2 * math.pi)
+        if max_energia is None:
+            max_energia = max(80, min(120, 100 + random.randint(-10, 10)))
+        self.max_energia = max_energia
+        self._energia = max(0, min(energia, self.max_energia))
+        self._esta_vivo = True
+        self.estado = "deambulando" # Estados: deambulando, buscando_comida, buscando_agua, cazando, huyendo
+        self.objetivo = None  # Puede ser una tupla (x,y) o un objeto Animal
+        
+        type(self).contador = getattr(type(self), 'contador', 0) + 1
+
+    @property
+    def nombre(self):
+        return self._nombre
+
+    @property
+    def x(self):
+        return int(self._x_float)
+
+    @property
+    def y(self):
+        return int(self._y_float)
+
+    @property
+    def edad(self):
+        return self._edad
+
+    @property
+    def energia(self):
+        return self._energia
+
+    @property
+    def esta_vivo(self):
+        return self._esta_vivo
+
+    @abstractmethod
+    def comer(self, ecosistema) -> str:
+        pass
+
+    @abstractmethod
+    def beber(self, ecosistema) -> str:
+        pass
+
+    def _validar_objetivo_coordenadas(self, x, y):
+        """Asegura que un objetivo de coordenadas esté dentro del margen de seguridad."""
+        valid_x = max(BORDE_MARGEN, min(x, SIM_WIDTH - 1 - BORDE_MARGEN))
+        valid_y = max(BORDE_MARGEN, min(y, SCREEN_HEIGHT - 1 - BORDE_MARGEN))
+        return (valid_x, valid_y)
+
+    def verificar_estado(self, ecosistema: 'Ecosistema') -> str:
+        """Verifica si el animal debe morir por sed, hambre o vejez."""
+        if not self._esta_vivo:
+            return ""
+
+        if self._energia <= 0 or self._sed >= 150 or self._edad > 365:
+            self._esta_vivo = False
+            ecosistema.agregar_carcasa(self.x, self.y)
+            mensaje = "hambre" if self._energia <= 0 else "sed" if self._sed >= 150 else "vejez"
+            return f" -> ¡{self._nombre} ha muerto de {mensaje}!"
+        return ""
+
+    def decidir_proximo_paso(self, ecosistema: 'Ecosistema'):
+        """El animal decide qué hacer en función de sus necesidades."""
+        # Prioridad 0: Si está comiendo o bebiendo, que termine.
+        if self.estado in ["comiendo", "bebiendo"]:
+            return
+
+        # Prioridad 1: Beber si tiene mucha sed
+        if self._sed > 70 and self.estado not in ["buscando_agua"]:
+            grid_x, grid_y = self.x // CELL_SIZE, self.y // CELL_SIZE
+            rio_cercano = ecosistema.terrain_cache["rio"].get((grid_x, grid_y))
+            if rio_cercano:
+                self.estado = "buscando_agua"
+                objetivo_x = random.randint(rio_cercano.rect.left, rio_cercano.rect.right)
+                objetivo_y = random.randint(rio_cercano.rect.top, rio_cercano.rect.bottom)
+                self.objetivo = self._validar_objetivo_coordenadas(objetivo_x, objetivo_y)
+                return
+
+        # Prioridad 2: Comer si tiene hambre
+        if self._energia < self.max_energia * 0.6 and self.estado not in ["buscando_comida"]:
+            if isinstance(self, Herbivoro):
+                objetivo_comida = self._encontrar_hierba_cercana(ecosistema)
+                if objetivo_comida:
+                    self.estado = "buscando_comida"
+                    self.objetivo = self._validar_objetivo_coordenadas(objetivo_comida[0], objetivo_comida[1])
+                    return
+
+
+    def moverse(self, ecosistema: 'Ecosistema'):
+        """Mueve al animal de forma semi-aleatoria, evitando bordes y obstáculos."""
+        if self.objetivo:
+            objetivo_x, objetivo_y = 0, 0
+            # Maneja si el objetivo es otro animal (para el futuro) o coordenadas
+            if isinstance(self.objetivo, Animal):
+                objetivo_x, objetivo_y = self.objetivo.x, self.objetivo.y
+            else: # Asume que es una tupla de coordenadas (x, y)
+                objetivo_x, objetivo_y = self.objetivo
+
+            # Movimiento dirigido hacia el objetivo
+            dx = objetivo_x - self._x_float
+            dy = objetivo_y - self._y_float
+            distancia = math.sqrt(dx**2 + dy**2)
+
+            # Considera que ha llegado si está muy cerca del objetivo
+            if distancia < max(self.velocidad, 5): # Usa un umbral un poco mayor que la velocidad
+                # Ha llegado al objetivo o muy cerca
+                self.objetivo = None # Limpia el objetivo al llegar
+            else:
+                self.direccion = math.atan2(dy, dx)
+        else:
+            # Movimiento deambulante (aleatorio)
+            if random.random() < 0.05: # 5% de probabilidad de cambiar de dirección
+                self.direccion += random.uniform(-0.5, 0.5)
+
+        nuevo_x = self._x_float + math.cos(self.direccion) * self.velocidad
+        nuevo_y = self._y_float + math.sin(self.direccion) * self.velocidad
+
+        # Lógica de rebote en los bordes y obstáculos
+        if not (BORDE_MARGEN < nuevo_x < SIM_WIDTH - BORDE_MARGEN) or ecosistema.choca_con_terreno(nuevo_x, self._y_float):
+            self.direccion = math.pi - self.direccion # Rebote horizontal
+        if not (BORDE_MARGEN < nuevo_y < SCREEN_HEIGHT - BORDE_MARGEN) or ecosistema.choca_con_terreno(self._x_float, nuevo_y):
+            self.direccion = -self.direccion # Rebote vertical
+
+        # Aplicar el movimiento validado
+        self._x_float += math.cos(self.direccion) * self.velocidad
+        self._y_float += math.sin(self.direccion) * self.velocidad
+
+    def __str__(self):
+        estado = "Vivo" if self._esta_vivo else "Muerto"
+        return f"Animal: {self._nombre}, Tipo: {self.__class__.__name__}, Edad: {self._edad}, Energía: {self._energia}, Estado: {estado}"
+
+class Herbivoro(Animal):
+    def _encontrar_hierba_cercana(self, ecosistema, radio_busqueda=5):
+        """Busca la celda con más hierba en un radio determinado."""
+        mejor_celda = None
+        max_hierba = 10  # No se moverá por menos de esta cantidad
+
+        grid_x_base, grid_y_base = self.x // CELL_SIZE, self.y // CELL_SIZE
+
+        for dx in range(-radio_busqueda, radio_busqueda + 1):
+            for dy in range(-radio_busqueda, radio_busqueda + 1):
+                gx, gy = grid_x_base + dx, grid_y_base + dy
+                if 0 <= gx < ecosistema.grid_width and 0 <= gy < ecosistema.grid_height:
+                    if ecosistema.grid_hierba[gx][gy] > max_hierba:
+                        max_hierba = ecosistema.grid_hierba[gx][gy]
+                        mejor_celda = ((gx * CELL_SIZE) + CELL_SIZE // 2, (gy * CELL_SIZE) + CELL_SIZE // 2)
+        return mejor_celda
+
+    def comer(self, ecosistema) -> str:
+        grid_x, grid_y = self.x // CELL_SIZE, self.y // CELL_SIZE
+        if ecosistema.grid_hierba[grid_x][grid_y] > 10:
+            cantidad_comida = min(ecosistema.grid_hierba[grid_x][grid_y], 20)
+            ecosistema.grid_hierba[grid_x][grid_y] -= cantidad_comida
+            self._energia = min(self.max_energia, self._energia + cantidad_comida * 0.5)
+            if self._energia >= self.max_energia:
+                self.estado = "deambulando"
+                self.objetivo = None # Limpia el objetivo al terminar de comer
+            return f"{self.nombre} está comiendo hierba."
+        return ""
+
+    def beber(self, ecosistema: 'Ecosistema') -> str:
+        grid_x, grid_y = self.x // CELL_SIZE, self.y // CELL_SIZE
+        if ecosistema.is_river[grid_x][grid_y]:
+            self._sed = 0
+            self.estado = "deambulando"
+            self.objetivo = None
+            return f"{self.nombre} ha bebido agua."
+        return ""
+
+class Carnivoro(Animal):
+    def comer(self, ecosistema) -> str:
+        return ""
+
+    def beber(self, ecosistema: 'Ecosistema') -> str:
+        grid_x, grid_y = self.x // CELL_SIZE, self.y // CELL_SIZE
+        if ecosistema.is_river[grid_x][grid_y]:
+            self._sed = 0
+            self.estado = "deambulando"
+            self.objetivo = None
+            return f"{self.nombre} ha bebido agua."
+        return ""
+
+class Omnivoro(Animal):
+    def comer(self, ecosistema) -> str:
+        return ""
+
+    def beber(self, ecosistema: 'Ecosistema') -> str:
+        grid_x, grid_y = self.x // CELL_SIZE, self.y // CELL_SIZE
+        if ecosistema.is_river[grid_x][grid_y]:
+            self._sed = 0
+            self.estado = "deambulando"
+            self.objetivo = None
+            return f"{self.nombre} ha bebido agua."
+        return ""
+
+class Conejo(Herbivoro):
+    def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
+        if max_energia is None:
+            max_energia = max(70, min(90, 80 + random.randint(-5, 5)))
+        super().__init__(nombre, x, y, edad, energia, max_energia)
+
+class Cabra(Herbivoro):
+    def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
+        if max_energia is None:
+            max_energia = max(90, min(110, 100 + random.randint(-5, 5)))
+        super().__init__(nombre, x, y, edad, energia, max_energia)
+        
+class Raton(Herbivoro):
+    def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
+        if max_energia is None:
+            max_energia = max(30, min(50, 40 + random.randint(-5, 5)))
+        super().__init__(nombre, x, y, edad, energia, max_energia)
+
+class Insecto(Herbivoro):
+    def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
+        if max_energia is None:
+            max_energia = max(30, min(50, 40 + random.randint(-5, 5)))
+        super().__init__(nombre, x, y, edad, energia, max_energia)
+
+class Leopardo(Carnivoro):
+    def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
+        if max_energia is None:
+            max_energia = max(100, min(120, 110 + random.randint(-5, 5)))
+        super().__init__(nombre, x, y, edad, energia, max_energia)
+
+class Gato(Carnivoro):
+    def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
+        if max_energia is None:
+            max_energia = max(75, min(95, 85 + random.randint(-5, 5)))
+        super().__init__(nombre, x, y, edad, energia, max_energia)
+        
+class Halcon(Carnivoro):
+    def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
+        if max_energia is None:
+            max_energia = max(70, min(90, 80 + random.randint(-5, 5)))
+        super().__init__(nombre, x, y, edad, energia, max_energia)
+        
+class Cerdo(Omnivoro):
+    def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
+        if max_energia is None:
+            max_energia = max(110, min(130, 120 + random.randint(-5, 5)))
+        super().__init__(nombre, x, y, edad, energia, max_energia)
+        
+class Mono(Omnivoro):
+    def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
+        if max_energia is None:
+            max_energia = max(80, min(100, 90 + random.randint(-5, 5)))
+        super().__init__(nombre, x, y, edad, energia, max_energia)
+        
+class Ecosistema:
+    def __init__(self):
+        self.tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto]
+        self.animales: list[Animal] = []
+        self.terreno = {
+            "praderas": [
+                Pradera((20, 400, 150, 150)),
+                Pradera((300, 50, 250, 100)),
+                Pradera((50, 50, 100, 150)),
+                Pradera((600, 400, 150, 120)),
+                Pradera((250, 200, 200, 50)),
+                Pradera((20, 560, 180, 120)),
+                Pradera((650, 550, 130, 130))  
+            ],
+            "rios": [
+                Rio((150, 0, 40, 300)),
+                Rio((150, 150, 100, 40)),
+                Rio((450, 0, 40, 250)),
+                Rio((450, 210, 200, 40)),
+                Rio((610, 210, 40, 490)),     # Río principal vertical
+                Rio((0, 400, 610, 40))       # Afluente oeste
+            ],
+            "selvas": [
+                Selva((200, 450, 250, 180)),
+                Selva((20, 20, 100, 100)),
+                Selva((500, 250, 150, 100)),
+                Selva((700, 20, 80, 250)),
+                Selva((550, 50, 200, 200)),
+                Selva((20, 200, 120, 150))
+            ],
+            "montanas": [],
+            "santuarios": [],
+            "arboles": [],
+            "plantas": [],
+        }
+        self.recursos = {
+            "carcasas": []
+        }
+        self.grid_width = SIM_WIDTH // CELL_SIZE
+        self.grid_height = SCREEN_HEIGHT // CELL_SIZE
+        self.grid_hierba = [[0 for _ in range(self.grid_height)] for _ in range(self.grid_width)]
+        self.is_river = [[False for _ in range(self.grid_height)] for _ in range(self.grid_width)]
+
+        for gx in range(self.grid_width):
+            for gy in range(self.grid_height):
+                cell_rect = pygame.Rect(gx * CELL_SIZE, gy * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                
+                if any(rio.rect.colliderect(cell_rect) for rio in self.terreno["rios"]):
+                    self.grid_hierba[gx][gy] = 0
+                    self.is_river[gx][gy] = True
+                    continue
+
+                max_val = MAX_HIERBA_NORMAL
+                if any(p.rect.colliderect(cell_rect) for p in self.terreno["praderas"]):
+                    max_val = MAX_HIERBA_PRADERA
+                self.grid_hierba[gx][gy] = random.randint(0, max_val)
+
+        self.dia_total = 1
+        self.hora_actual = 0
+        self.dias_por_estacion = 20
+        self.estacion_actual = "Primavera"
+        self.estaciones = {
+            "Primavera": {"crecimiento": 2.0, "coste_energia": 0.1}, # Crecimiento moderado
+            "Verano":    {"crecimiento": 1.5, "coste_energia": 0.4}, # Menos crecimiento, más coste
+            "Otoño":     {"crecimiento": 0.5, "coste_energia": 0.7}, # Poco crecimiento, alto coste
+            "Invierno":  {"crecimiento": 0.1, "coste_energia": 1.5}  # Invierno muy duro
+        }
+        self.clima_actual = "Normal"
+
+        self.animales_nuevos = []
+        self.hierba_cambio = False # Flag para optimización de renderizado
+
+        self.grid_animales = {}
+        self._poblar_decoraciones()
+        self.terrain_cache = {"rio": {}, "selva": {}}
+        self._precalcular_terrenos_cercanos()
+
+    def choca_con_terreno(self, x, y):
+        radio_tronco = 5
+        return any(math.sqrt((ax - x)**2 + (ay - y)**2) < radio_tronco for ax, ay in self.terreno["arboles"])
+
+    def agregar_carcasa(self, x, y):
+        if not self.choca_con_terreno(x, y):
+            nueva_carcasa = Carcasa(x, y)
+            self.recursos["carcasas"].append(nueva_carcasa)
+    
+    def _es_posicion_valida_para_vegetacion(self, x, y, decoraciones_existentes, min_dist):
+        if any(rio.rect.collidepoint(x, y) for rio in self.terreno["rios"]):
+            return False
+        return self._es_posicion_decoracion_valida(x, y, decoraciones_existentes, min_dist)
+
+    def _es_posicion_decoracion_valida(self, x, y, decoraciones_existentes, min_dist):
+        for dx, dy in decoraciones_existentes:
+            dist = math.sqrt((x - dx)**2 + (y - dy)**2)
+            if dist < min_dist:
+                return False
+        return True
+
+    def _poblar_decoraciones(self):
+        self.terreno["arboles"].clear()
+        self.terreno["plantas"].clear()
+        
+        decoraciones_todas = []
+        intentos_max = 80
+        margen = 5
+
+        for selva in self.terreno["selvas"]:
+            for _ in range(35):
+                for _ in range(intentos_max):
+                    x = random.randint(selva.rect.left + margen, selva.rect.right - margen)
+                    y = random.randint(selva.rect.top + margen, selva.rect.bottom - margen)
+                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=35):
+                        self.terreno["arboles"].append((x, y)); decoraciones_todas.append((x, y))
+                        break
+
+        zonas_alimento = self.terreno["praderas"] + self.terreno["selvas"]
+        for zona in zonas_alimento:
+            for _ in range(35):
+                for _ in range(intentos_max):
+                    x = random.randint(zona.rect.left + margen, zona.rect.right - margen)
+                    y = random.randint(zona.rect.top + margen, zona.rect.bottom - margen)
+                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=20):
+                        self.terreno["plantas"].append((x, y)); decoraciones_todas.append((x, y))
+                        break
+
+        for _ in range(120):
+            for _ in range(intentos_max):
+                x, y = random.randint(0, SIM_WIDTH), random.randint(0, SCREEN_HEIGHT)
+                if not self.choca_con_terreno(x,y) and self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=20):
+                    self.terreno["plantas"].append((x, y)); decoraciones_todas.append((x, y))
+                    break
+
+    def _precalcular_terrenos_cercanos(self):
+        print("Pre-calculando caché de terrenos cercanos para optimización...")
+        for gx in range(self.grid_width):
+            for gy in range(self.grid_height):
+                x, y = gx * CELL_SIZE, gy * CELL_SIZE
+                
+                mejor_rio, menor_dist_rio_sq = None, float('inf')
+                for rio in self.terreno["rios"]:
+                    dist_sq = (x - rio.rect.centerx)**2 + (y - rio.rect.centery)**2
+                    if dist_sq < menor_dist_rio_sq:
+                        menor_dist_rio_sq, mejor_rio = dist_sq, rio
+                if mejor_rio: self.terrain_cache["rio"][(gx, gy)] = mejor_rio
+
+                mejor_selva, menor_dist_selva_sq = None, float('inf')
+                for selva in self.terreno["selvas"]:
+                    dist_sq = (x - selva.rect.centerx)**2 + (y - selva.rect.centery)**2
+                    if dist_sq < menor_dist_selva_sq:
+                        menor_dist_selva_sq, mejor_selva = dist_sq, selva
+                if mejor_selva: self.terrain_cache["selva"][(gx, gy)] = (mejor_selva, menor_dist_selva_sq)
+
+    def _actualizar_estacion(self):
+        indice_estacion = (self.dia_total // self.dias_por_estacion) % 4
+        self.estacion_actual = list(self.estaciones.keys())[indice_estacion]
+
+    def _actualizar_clima(self):
+        if random.random() < 0.05:
+            self.clima_actual = "Sequía"
+        else:
+            self.clima_actual = "Normal"
+
+    def _actualizar_grid_animales(self):
+        self.grid_animales.clear()
+        for animal in self.animales:
+            grid_x = int(animal.x // CELL_SIZE)
+            grid_y = int(animal.y // CELL_SIZE)
+            key = (grid_x, grid_y)
+            if key not in self.grid_animales:
+                self.grid_animales[key] = []
+            self.grid_animales[key].append(animal)
+
+    def obtener_animales_cercanos(self, x, y, radio=2):
+        """Obtiene los animales cercanos a una posición"""
+        grid_x = int(x // CELL_SIZE)
+        grid_y = int(y // CELL_SIZE)
+        cercanos = []
+        for dx in range(-radio, radio + 1):
+            for dy in range(-radio, radio + 1):
+                key = (grid_x + dx, grid_y + dy)
+                if key in self.grid_animales:
+                    cercanos.extend(self.grid_animales[key])
+        return cercanos
+
+    def _rescate_extincion(self):
+        if not self.animales:
+            return
+
+        for tipo_animal in self.tipos_de_animales:
+            conteo = sum(1 for a in self.animales if isinstance(a, tipo_animal))
+            if conteo == 0 and random.random() < 0.10:
+                print(f"¡Inmigración afortunada! Un pequeño grupo de {tipo_animal.__name__} ha llegado.")
+                for _ in range(2):
+                    self.agregar_animal(tipo_animal, es_rescate=True)
+
+    def simular_hora(self):
+        self._actualizar_grid_animales()
+
+        self.hora_actual += 1
+
+        random.shuffle(self.animales)
+        for rio in self.terreno["rios"]:
+            for pez in rio.peces:
+                pez.moverse()
+
+        # --- LÓGICA DE COMPORTAMIENTO BÁSICO DE ANIMALES ---
+        coste_energia_base = self.estaciones[self.estacion_actual]['coste_energia']
+        for animal in self.animales:
+            if not animal.esta_vivo: continue
+
+            animal.decidir_proximo_paso(self)
+            animal.moverse(self)
+            animal.comer(self) # Intentará comer si está en la posición correcta
+            animal.beber(self) # Intentará beber si está en la posición correcta
+
+            animal._energia -= coste_energia_base
+            animal._sed += 0.5
+
+            animal.verificar_estado(self)
+        # -----------------------------------------------------
+
+        if self.hora_actual >= 24:
+            self.hora_actual = 0
+            self.dia_total += 1
+            self._actualizar_estacion()
+            self._actualizar_clima()
+
+            factor_crecimiento = self.estaciones[self.estacion_actual]['crecimiento']
+            if self.clima_actual == "Sequía":
+                factor_crecimiento *= 0.1
+
+            for gx in range(self.grid_width):
+                for gy in range(self.grid_height):
+                    if self.is_river[gx][gy]:
+                        self.grid_hierba[gx][gy] = 0
+                        continue
+
+                    tasa_crecimiento_base = 1 
+                    calidad_suelo_local = 1.0
+                    max_capacidad = MAX_HIERBA_NORMAL
+                    tasa_crecimiento_base = 1
+                    
+                    cell_rect = pygame.Rect(gx * CELL_SIZE, gy * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                    pradera_actual = next((p for p in self.terreno["praderas"] if p.rect.colliderect(cell_rect)), None)
+                    if pradera_actual:
+                        max_capacidad = pradera_actual.max_hierba
+                        tasa_crecimiento_base = pradera_actual.tasa_crecimiento
+                    crecimiento_real = int(tasa_crecimiento_base * factor_crecimiento * (self.grid_hierba[gx][gy] / max_capacidad))
+                    self.grid_hierba[gx][gy] += crecimiento_real
+                    self.grid_hierba[gx][gy] = min(self.grid_hierba[gx][gy], max_capacidad)
+            self.hierba_cambio = True # La hierba creció, necesita redibujarse
+            
+            for selva in self.terreno["selvas"]: selva.crecer_recursos(factor_crecimiento)
+            for rio in self.terreno["rios"]: rio.crecer_recursos(factor_crecimiento)
+
+            for c in self.recursos["carcasas"]: c.dias_descomposicion += 1
+            self.recursos["carcasas"] = [c for c in self.recursos["carcasas"] if c.dias_descomposicion < 5]
+
+            for animal in self.animales:
+                animal._edad += 1
+
+            self.animales_nuevos = []
+
+        self.animales = [animal for animal in self.animales if animal.esta_vivo]
+        self.animales.extend(self.animales_nuevos)
+        
+        if self.hora_actual == 0: self._rescate_extincion()
+
+    def agregar_animal(self, tipo_animal, nombre=None, es_rescate=False):
+        if nombre is None:
+            nombre = f"{tipo_animal.__name__} {getattr(tipo_animal, 'contador', 0) + 1}"
+
+        intentos = 0
+        while intentos < 100:
+            x = random.randint(20, SIM_WIDTH - 20)
+            y = random.randint(20, SCREEN_HEIGHT - 20)
+            if not self.choca_con_terreno(x, y): break
+            intentos += 1
+        nuevo_animal = tipo_animal(nombre, x, y)
+        self.animales.append(nuevo_animal)
+
+    def guardar_estado(self, archivo="save_state.json"):
+        estado = {
+            "dia_total": self.dia_total,
+            "grid_hierba": self.grid_hierba,
+            "selvas": [{"rect": list(s.rect), "bayas": s.bayas} for s in self.terreno["selvas"]],
+            "rios": [{"rect": list(r.rect), "num_peces": len(r.peces)} for r in self.terreno["rios"]],
+            "animales": [
+                {
+                    "tipo": a.__class__.__name__,
+                    "nombre": a.nombre, "x": a.x, "y": a.y, "edad": a.edad,
+                    "energia": a.energia, "sed": a._sed, "max_energia": a.max_energia
+                }
+                for a in self.animales
+            ]
+        }
+        with open(archivo, 'w') as f:
+            json.dump(estado, f, indent=4)
+
+    def cargar_estado(self, archivo="save_state.json"):
+        with open(archivo, 'r') as f:
+            estado = json.load(f)
+
+        self.dia_total = estado["dia_total"]
+        self.grid_hierba = estado.get("grid_hierba", self.grid_hierba)
+        for i, s_data in enumerate(estado["selvas"]):
+            self.terreno["selvas"][i].bayas = s_data["bayas"]
+        
+        self._precalcular_terrenos_cercanos()
+
+        for i, r_data in enumerate(estado.get("rios", [])):
+            rio = self.terreno["rios"][i]
+            rio.peces = []
+            for _ in range(r_data.get("num_peces", 20)):
+                x = random.randint(rio.rect.left + 5, rio.rect.right - 5)
+                y = random.randint(rio.rect.top + 5, rio.rect.bottom - 5)
+                rio.peces.append(Pez(x, y, rio))
+
+        self.animales = []
+        tipos = {"Herbivoro": Herbivoro, "Carnivoro": Carnivoro, "Omnivoro": Omnivoro, "Conejo": Conejo, "Raton": Raton, "Cabra": Cabra, "Leopardo": Leopardo, "Gato": Gato, "Cerdo": Cerdo, "Mono": Mono, "Halcon": Halcon, "Insecto": Insecto}
+        for a_data in estado["animales"]:
+            tipo_clase = tipos.get(a_data["tipo"])
+            if tipo_clase:
+                max_energia_default = max(80, min(120, 100 + random.randint(-10, 10)))
+                animal = tipo_clase(a_data["nombre"], a_data["x"], a_data["y"], 
+                                    a_data.get("edad", 0), a_data.get("energia", 100), 
+                                    max_energia=a_data.get("max_energia", max_energia_default))
+                animal._sed = a_data.get("sed", 0)
+                animal.estado = a_data.get("estado", "deambulando")
+                self.animales.append(animal)
