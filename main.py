@@ -1,16 +1,12 @@
 import pygame
-import math 
 import random
 from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, Halcon, Insecto, CELL_SIZE, MAX_HIERBA_PRADERA, Rio, Pez
 
-# --- Constantes para Pygame ---
-# Las constantes de la simulación (SIM_WIDTH, etc.) están ahora en model.py
 SCREEN_WIDTH = 1200
 SCREEN_HEIGHT = 700
 SIM_WIDTH = 800
 UI_WIDTH = 400
 
-# --- Paleta de Colores ---
 COLOR_BACKGROUND = (22, 160, 133)
 COLOR_SIM_AREA = (46, 204, 113)
 COLOR_HERBIVORO = (255, 255, 255)
@@ -24,7 +20,6 @@ COLOR_BUTTON = (26, 188, 156)
 COLOR_PEZ = (0, 191, 255)
 COLOR_CARCASA = (128, 128, 128)
 
-# --- Clase de la Vista (GUI con Pygame) ---
 class PopulationGraph:
     def __init__(self, x, y, width, height, font):
         self.rect = pygame.Rect(x, y, width, height)
@@ -51,22 +46,19 @@ class PopulationGraph:
         title_surf = self.font.render("Población", True, (236, 240, 241))
         surface.blit(title_surf, (self.rect.x + 5, self.rect.y + 5))
 
-        # Dibujar leyenda
         legend_y = self.rect.y + 20
         for pop_type, label in self.labels.items():
             label_surf = self.font.render(label, True, self.colors[pop_type])
             surface.blit(label_surf, (self.rect.right - 80, legend_y))
             legend_y += 15
-        
+
         if not self.history:
             return
-        
-        # Lógica optimizada y más segura para encontrar la población máxima
+
         try:
-            # Usamos un generador y un valor por defecto de 1 para evitar errores con listas vacías
             max_pop = max((max(p) for p in self.history if p), default=1)
         except ValueError:
-            max_pop = 1 # Fallback por si acaso
+            max_pop = 1
 
         for i, pop_type in enumerate(["herb", "carn", "omni"]):
             points = []
@@ -105,9 +97,7 @@ class PygameView:
         self.font_small = pygame.font.SysFont("consola", 14)
         self.font_tiny = pygame.font.SysFont("consola", 12)
         self.sprites = self._load_sprites()
-        # Cargar texturas de terreno
         self.terrain_textures = self._load_terrain_textures()
-        # Cargar texturas animadas para el agua
         self.agua_texturas = self._load_water_textures()
         self.agua_frame_actual = 0
         self.tiempo_animacion_agua = 500 # ms por frame de animación
@@ -131,11 +121,8 @@ class PygameView:
         self.graph = PopulationGraph(SIM_WIDTH + 10, SCREEN_HEIGHT - 350, UI_WIDTH - 20, 120, self.font_small)
         self.mouse_pos = None
 
-        # Superficie para el renderizado optimizado de la hierba
         self.hierba_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        # NUEVO: Superficie para el fondo estático (terreno, decoraciones)
         self.background_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT))
-        # Flag para saber si el fondo estático necesita ser redibujado (ej. al cargar partida)
         self.needs_static_redraw = True
 
     def _load_sprites(self):
@@ -153,7 +140,7 @@ class PygameView:
             "Pez": {"file": "pez.png", "size": (10, 10)},
             "arbol": {"file": "arbol_medium.png", "size": (30, 30)},
             "planta": {"file": "planta_small.png", "size": (12, 12)},
-            "hierba": {"file": "hierba.png", "size": (20, 20)}  # Añadir sprite para hierba
+            "hierba": {"file": "hierba.png", "size": (20, 20)}
         }
         try:
             for name, data in sprite_definitions.items():
@@ -167,7 +154,6 @@ class PygameView:
             return None
 
     def _load_terrain_textures(self):
-        """Carga las texturas para los diferentes tipos de terreno."""
         textures = {}
         texture_files = {
             "fondo": "textura_fondo.png",
@@ -186,7 +172,6 @@ class PygameView:
 
 
     def _load_water_textures(self):
-        """Carga las texturas animadas para el agua (fondo_agua0.png, fondo_agua1.png, etc.)."""
         texturas = []
         i = 0
         while True:
@@ -195,7 +180,6 @@ class PygameView:
                 texturas.append(pygame.image.load(ruta).convert())
                 i += 1
             except (pygame.error, FileNotFoundError):
-                # Si no se encuentra el archivo, se asume que no hay más texturas.
                 break
         if not texturas:
             print("Advertencia: No se encontraron texturas de agua (ej: assets/fondo_agua0.png). Se usará un color sólido.")
@@ -204,7 +188,6 @@ class PygameView:
 
     def _create_buttons(self):
         buttons = {}
-        # --- Definición de la cuadrícula de botones para una mejor organización ---
         ui_x = SIM_WIDTH
         margin = 15
         spacing = 10
@@ -215,7 +198,6 @@ class PygameView:
         col2_x = col1_x + btn_width + spacing
         col3_x = col2_x + btn_width + spacing
         
-        # Botones de control de velocidad
         control_y = SCREEN_HEIGHT - 225
         buttons["pause_resume"] = Button(SIM_WIDTH + 10, control_y, 130, 35, "Pausa/Reanudar", COLOR_BUTTON, COLOR_TEXT)
         buttons["next_day"] = Button(SIM_WIDTH + 150, control_y, 130, 35, "Adelantar Día", COLOR_BUTTON, COLOR_TEXT)
@@ -226,8 +208,8 @@ class PygameView:
         buttons["add_gato"] = Button(col2_x, SCREEN_HEIGHT - 135, btn_width, btn_height, "Añadir Gato", COLOR_CARNIVORO, COLOR_TEXT)
         buttons["add_cerdo"] = Button(col1_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Cerdo", COLOR_OMNIVORO, COLOR_TEXT)
         buttons["add_mono"] = Button(col2_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Mono", COLOR_OMNIVORO, COLOR_TEXT)
-        buttons["add_halcon"] = Button(col3_x, SCREEN_HEIGHT - 135, btn_width, btn_height, "Añadir Halcón", COLOR_CARNIVORO, COLOR_TEXT) # Ajuste de posición
-        buttons["add_insecto"] = Button(col3_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Insecto", COLOR_HERBIVORO, (0,0,0)) # Ajuste de posición
+        buttons["add_halcon"] = Button(col3_x, SCREEN_HEIGHT - 135, btn_width, btn_height, "Añadir Halcón", COLOR_CARNIVORO, COLOR_TEXT)
+        buttons["add_insecto"] = Button(col3_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Insecto", COLOR_HERBIVORO, (0,0,0))
         
         btn_width_small, btn_height_small = 90, 30
         buttons["save"] = Button(SIM_WIDTH + 10, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Guardar", (0, 100, 0), COLOR_TEXT)
@@ -246,7 +228,6 @@ class PygameView:
         surface.blit(textobj, textrect)
 
     def _draw_tiled_texture(self, surface, texture, rect):
-        """Rellena un rectángulo con una textura de forma repetida (tiling)."""
         if not texture:
             return
         tex_w, tex_h = texture.get_size()
@@ -255,7 +236,6 @@ class PygameView:
                 surface.blit(texture, (x, y))
 
     def _update_water_animation(self):
-        """Actualiza el frame de la animación del agua basado en el tiempo."""
         if not self.agua_texturas:
             return
         current_time = pygame.time.get_ticks()
@@ -272,22 +252,7 @@ class PygameView:
                 sprite = self.sprites.get(animal.__class__.__name__)
                 if sprite:
                     self.screen.blit(sprite, (sprite_pos_x, sprite_pos_y))
-                
-                # --- Barra de energía centrada ---
-                bar_width = 15
-                bar_height = 4
-                bar_x = animal.x - bar_width // 2
-                bar_y = sprite_pos_y - bar_height - 2 # Posicionar la barra sobre el sprite
 
-                max_energia = animal.max_energia or 100
-                energia_percent = max(0, animal.energia) / max_energia
-                pygame.draw.rect(self.screen, (0,0,0), (bar_x-1, bar_y-1, bar_width+2, bar_height+2))
-                pygame.draw.rect(self.screen, (90, 90, 90), (bar_x, bar_y, bar_width, bar_height))
-                pygame.draw.rect(self.screen, (0, 255, 0), (bar_x, bar_y, bar_width * energia_percent, bar_height))
-                
-                # --- Indicador de estado de huida ---
-                if animal.estado == "huyendo":
-                    self._draw_text("!", self.font_normal, (255, 255, 0), self.screen, animal.x - 4, bar_y - 15)
         else:
             for animal in ecosistema.animales:
                 color = (0,0,0)
@@ -300,7 +265,6 @@ class PygameView:
 
     def _draw_ui(self, ecosistema, animal_seleccionado, sim_speed):
         ui_x = SIM_WIDTH + 10
-        # Dibujar el fondo del panel de UI para limpiar el texto anterior
         ui_rect = pygame.Rect(SIM_WIDTH, 0, UI_WIDTH, SCREEN_HEIGHT)
         pygame.draw.rect(self.screen, COLOR_BACKGROUND, ui_rect)
 
@@ -328,7 +292,6 @@ class PygameView:
                 self._draw_text(line, self.font_small, COLOR_TEXT, self.screen, ui_x, y_offset)
                 y_offset += 15
         else:
-            # Desglose de poblaciones por tipo
             herb_count = sum(1 for a in ecosistema.animales if isinstance(a, Herbivoro))
             carn_count = sum(1 for a in ecosistema.animales if isinstance(a, Carnivoro))
             omni_count = sum(1 for a in ecosistema.animales if isinstance(a, Omnivoro))
@@ -346,7 +309,6 @@ class PygameView:
             peces_totales = sum(len(r.peces) for r in ecosistema.terreno["rios"])
             self._draw_text(f"Peces: {peces_totales}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
             y_offset += 20
-            # Indicador de velocidad
             speed_text = f"Velocidad: x{sim_speed}"
             self._draw_text(speed_text, self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
             y_offset += 20
@@ -357,13 +319,10 @@ class PygameView:
         self.graph.draw(self.screen)
 
     def _create_static_background(self, ecosistema):
-        """Dibuja todos los elementos estáticos del terreno en una superficie para optimizar el renderizado."""
-        # Colores y texturas de fondo
         self.background_surface.fill(COLOR_SIM_AREA)
         if self.terrain_textures.get("fondo"):
             self._draw_tiled_texture(self.background_surface, self.terrain_textures["fondo"], self.background_surface.get_rect())
 
-        # Dibujar terrenos con texturas o colores sólidos
         for tipo_terreno, datos in {
             "praderas": {"texture": self.terrain_textures.get("pradera"), "color": (144, 238, 144)},
             "selvas": {"texture": self.terrain_textures.get("selva"), "color": COLOR_SELVA},
@@ -376,7 +335,6 @@ class PygameView:
                 else:
                     pygame.draw.rect(self.background_surface, datos["color"], terreno.rect)
 
-        # Dibujar ríos (la animación se gestionará por separado)
         self._update_water_animation()
         for rio in ecosistema.terreno["rios"]:
             if self.agua_texturas:
@@ -384,7 +342,6 @@ class PygameView:
             else:
                 pygame.draw.rect(self.background_surface, COLOR_RIO, rio.rect)
 
-        # Dibujar decoraciones estáticas (árboles, plantas)
         for x, y in ecosistema.terreno["arboles"]:
             sprite = self.sprites.get("arbol")
             if sprite: self.background_surface.blit(sprite, (x - sprite.get_width()//2, y - sprite.get_height()//2))
@@ -395,8 +352,7 @@ class PygameView:
         self.needs_static_redraw = False
 
     def update_hierba_surface(self, ecosistema):
-        """Renderiza la hierba en su propia superficie transparente."""
-        self.hierba_surface.fill((0, 0, 0, 0)) # Limpiar la superficie con transparencia
+        self.hierba_surface.fill((0, 0, 0, 0))
         hierba_sprite = self.sprites.get("hierba") if self.sprites else None
         for gx in range(ecosistema.grid_width):
             for gy in range(ecosistema.grid_height):
@@ -409,7 +365,6 @@ class PygameView:
                         self.hierba_surface.blit(temp_sprite, (gx * CELL_SIZE, gy * CELL_SIZE))
 
     def _draw_recursos(self, ecosistema):
-        """Dibuja recursos dinámicos como carcasas y peces."""
         for carcasa in ecosistema.recursos["carcasas"]:
             alpha = max(0, 255 - carcasa.dias_descomposicion * 50)
             temp_surface = pygame.Surface((10, 10), pygame.SRCALPHA)
@@ -423,7 +378,7 @@ class PygameView:
             self._create_static_background(ecosistema)
 
         self.screen.blit(self.background_surface, (0, 0))
-        self.screen.blit(self.hierba_surface, (0, 0)) # Dibujar la superficie de hierba pre-renderizada
+        self.screen.blit(self.hierba_surface, (0, 0))
         self._draw_recursos(ecosistema)
         
         self._draw_animales(ecosistema, animal_seleccionado)
@@ -481,9 +436,8 @@ class SimulationController:
         self.animal_seleccionado = None
         self.paused = True
         
-        # Ajustar velocidades
-        self.sim_speed_multiplier = 3  # Aumentado para mejor fluidez
-        self.base_time_per_hour = 25   # Reducido para mejor respuesta
+        self.sim_speed_multiplier = 3
+        self.base_time_per_hour = 25
         self.last_update_time = pygame.time.get_ticks()
         self.clock = pygame.time.Clock()
 
@@ -494,20 +448,16 @@ class SimulationController:
                 self.ecosistema.agregar_animal(tipo)
 
     def _avanzar_dia(self):
-        # Bucle para simular las 24 horas de un día
         for _ in range(24):
             self.ecosistema.simular_hora()
-            # Detener si la simulación termina a mitad del día
             if self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales:
                 return True
         
-        # Actualizar el gráfico una vez al final del día avanzado
         self._actualizar_grafico()
-        self.view.update_hierba_surface(self.ecosistema) # Actualizar hierba después del crecimiento
+        self.view.update_hierba_surface(self.ecosistema)
         return self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales
     
     def _actualizar_grafico(self):
-        """Calcula las poblaciones y actualiza el gráfico."""
         poblaciones = (
             sum(1 for a in self.ecosistema.animales if isinstance(a, Herbivoro)),
             sum(1 for a in self.ecosistema.animales if isinstance(a, Carnivoro)),
@@ -516,7 +466,6 @@ class SimulationController:
         self.view.graph.update(poblaciones)
 
     def _avanzar_hora(self):
-        # Actualizar gráfico cada hora para ver cambios más suaves
         poblaciones = (
             sum(1 for a in self.ecosistema.animales if isinstance(a, Herbivoro)),
             sum(1 for a in self.ecosistema.animales if isinstance(a, Carnivoro)),
@@ -525,7 +474,6 @@ class SimulationController:
         self.view.graph.update(poblaciones)
 
         self.ecosistema.simular_hora()
-        # Si la hierba cambió (porque un animal comió), actualizar la superficie
         if self.ecosistema.hierba_cambio:
             self.view.update_hierba_surface(self.ecosistema)
             self.ecosistema.hierba_cambio = False
@@ -534,7 +482,6 @@ class SimulationController:
         return False
 
     def _setup_button_actions(self):
-        """Crea un diccionario que mapea nombres de botones a sus funciones."""
         animal_map = {
             "conejo": Conejo, "raton": Raton, "cabra": Cabra,
             "leopardo": Leopardo, "gato": Gato, "halcon": Halcon,
@@ -550,10 +497,7 @@ class SimulationController:
             "restart": self._action_restart
         }
         
-        # Añadir dinámicamente las acciones para agregar animales
         for name, cls in animal_map.items():
-            # Usamos una función lambda con un argumento por defecto para "capturar"
-            # el valor de 'cls' en cada iteración.
             self.button_actions[f"add_{name}"] = lambda species=cls: self.ecosistema.agregar_animal(species)
 
     def _action_save(self): self.ecosistema.guardar_estado()
@@ -574,11 +518,11 @@ class SimulationController:
     def _action_advance_day(self):
         if self.ecosistema.dia_total < self.dias_simulacion and self.ecosistema.animales:
             return self._avanzar_dia()
-        return True  # La simulación ya ha terminado o no hay animales
+        return True
 
     def run(self):
         self._poblar_ecosistema()
-        self.view.update_hierba_surface(self.ecosistema) # Renderizado inicial de la hierba
+        self.view.update_hierba_surface(self.ecosistema)
         
         running = True
         sim_over = False
@@ -590,7 +534,6 @@ class SimulationController:
             current_time = pygame.time.get_ticks()
             delta_time = current_time - self.last_update_time
 
-            # Actualizar la simulación si no está en pausa
             if not self.paused and not sim_over and delta_time > self.base_time_per_hour / self.sim_speed_multiplier:
                 sim_over = self._avanzar_hora()
                 self.last_update_time = current_time
@@ -598,7 +541,6 @@ class SimulationController:
                 if self.animal_seleccionado and not self.animal_seleccionado.esta_vivo:
                     self.animal_seleccionado = None
 
-            # Manejo de eventos (refactorizado para mayor claridad)
             running, sim_over = self.handle_events(running, sim_over)
 
             self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.sim_speed_multiplier)
@@ -618,7 +560,6 @@ class SimulationController:
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and not sim_over:
                 pos = pygame.mouse.get_pos()
-                # Comprobar si se ha hecho clic en un botón
                 clicked_button_name = self.get_clicked_button(pos)
                 if clicked_button_name:
                     action = self.button_actions.get(clicked_button_name)
@@ -627,7 +568,6 @@ class SimulationController:
                         if clicked_button_name in ["next_day", "restart"]:
                             sim_over = result or sim_over
                 else:
-                    # Si no se hizo clic en un botón, comprobar si se hizo clic en un animal
                     self.select_animal_at(pos)
         return running, sim_over
 
@@ -638,16 +578,13 @@ class SimulationController:
         return None
 
     def select_animal_at(self, pos):
-        if pos[0] < SIM_WIDTH: # Solo seleccionar si el clic es en el área de simulación
+        if pos[0] < SIM_WIDTH:
             self.animal_seleccionado = None
-            # Iterar en reversa para seleccionar el que está dibujado encima.
             for animal in reversed(self.ecosistema.animales):
                 dist_sq = (animal.x - pos[0])**2 + (animal.y - pos[1])**2
-                if dist_sq < 12**2: # 12 píxeles de radio al cuadrado
+                if dist_sq < 12**2:
                     self.animal_seleccionado = animal
                     break
-
-# --- Ejecución Principal ---
 
 def main():
     controlador = SimulationController(dias_simulacion=200)
