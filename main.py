@@ -105,6 +105,14 @@ class PygameView:
         self.font_small = pygame.font.SysFont("consola", 14)
         self.font_tiny = pygame.font.SysFont("consola", 12)
         self.sprites = self._load_sprites()
+        # Cargar texturas de terreno
+        self.terrain_textures = self._load_terrain_textures()
+        # Cargar texturas animadas para el agua
+        self.agua_texturas = self._load_water_textures()
+        self.agua_frame_actual = 0
+        self.tiempo_animacion_agua = 500 # ms por frame de animación
+        self.ultimo_cambio_agua = pygame.time.get_ticks()
+
         self.music_playing = False
         try:
             import os
@@ -158,6 +166,42 @@ class PygameView:
             print("Para usar sprites, crea una carpeta 'assets' y coloca dentro los archivos .png de los animales (conejo.png, gato.png, etc.).\n")
             return None
 
+    def _load_terrain_textures(self):
+        """Carga las texturas para los diferentes tipos de terreno."""
+        textures = {}
+        texture_files = {
+            "fondo": "textura_fondo.png",
+            "selva": "textura_selva.png",
+            "pradera": "textura_pradera.png",
+            "montana": "textura_montana.png",
+            "santuario": "textura_santuario.png"
+        }
+        for name, filename in texture_files.items():
+            try:
+                textures[name] = pygame.image.load(f"assets/{filename}").convert()
+            except (pygame.error, FileNotFoundError):
+                print(f"Advertencia: No se encontró la textura '{filename}'. Se usará un color sólido.")
+                textures[name] = None
+        return textures
+
+
+    def _load_water_textures(self):
+        """Carga las texturas animadas para el agua (fondo_agua0.png, fondo_agua1.png, etc.)."""
+        texturas = []
+        i = 0
+        while True:
+            try:
+                ruta = f"assets/fondo_agua{i}.png"
+                texturas.append(pygame.image.load(ruta).convert())
+                i += 1
+            except (pygame.error, FileNotFoundError):
+                # Si no se encuentra el archivo, se asume que no hay más texturas.
+                break
+        if not texturas:
+            print("Advertencia: No se encontraron texturas de agua (ej: assets/fondo_agua0.png). Se usará un color sólido.")
+        return texturas
+
+
     def _create_buttons(self):
         buttons = {}
         # --- Definición de la cuadrícula de botones para una mejor organización ---
@@ -201,82 +245,24 @@ class PygameView:
         textrect.topleft = (x, y)
         surface.blit(textobj, textrect)
 
-    def update_hierba_surface(self, ecosistema):
-        """Actualiza la superficie de la hierba. Llamar solo cuando la hierba cambia."""
-        self.hierba_surface.fill((0, 0, 0, 0)) # Limpiar la superficie
-        if self.sprites and "hierba" in self.sprites:
-            sprite_hierba = self.sprites["hierba"]
-            for gx in range(ecosistema.grid_width):
-                for gy in range(ecosistema.grid_height):
-                    nivel_hierba = ecosistema.grid_hierba[gx][gy]
-                    if nivel_hierba > 0:
-                        alpha = int(255 * (nivel_hierba / MAX_HIERBA_PRADERA))
-                        sprite_hierba.set_alpha(alpha)
-                        self.hierba_surface.blit(sprite_hierba, (gx * CELL_SIZE, gy * CELL_SIZE))
-        else:
-            # Método alternativo si no hay sprite
-            for gx in range(ecosistema.grid_width):
-                for gy in range(ecosistema.grid_height):
-                    nivel_hierba = ecosistema.grid_hierba[gx][gy]
-                    if nivel_hierba > 0:
-                        # Determinar el máximo local (pradera o normal)
-                        es_pradera = any(p.rect.collidepoint(gx * CELL_SIZE, gy * CELL_SIZE) for p in ecosistema.terreno["praderas"])
-                        max_local = MAX_HIERBA_PRADERA if es_pradera else 70 # MAX_HIERBA_NORMAL
-                        intensidad = min(1.0, nivel_hierba / max_local)
-                        color_base = list(COLOR_SIM_AREA)
-                        color_hierba = (34, 139, 34)
-                        color_final = tuple([int(color_base[i] * (1 - intensidad) + color_hierba[i] * intensidad) for i in range(3)])
-                        pygame.draw.rect(self.hierba_surface, color_final, (gx * CELL_SIZE, gy * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+    def _draw_tiled_texture(self, surface, texture, rect):
+        """Rellena un rectángulo con una textura de forma repetida (tiling)."""
+        if not texture:
+            return
+        tex_w, tex_h = texture.get_size()
+        for y in range(rect.top, rect.bottom, tex_h):
+            for x in range(rect.left, rect.right, tex_w):
+                surface.blit(texture, (x, y))
 
-    def _create_static_background(self, ecosistema):
-        """Dibuja todos los elementos estáticos en una superficie para optimizar el renderizado."""
-        self.background_surface.fill(COLOR_SIM_AREA)
-        
-        # --- Dibujo de auras de terreno ---
-        for selva in ecosistema.terreno["selvas"]:
-            aura_rect = selva.rect.inflate(10, 10)
-            s = pygame.Surface(aura_rect.size, pygame.SRCALPHA)
-            s.fill(COLOR_SELVA + (30,))
-            self.background_surface.blit(s, aura_rect.topleft)
-        for rio in ecosistema.terreno["rios"]:
-            aura_rect = rio.rect.inflate(10, 10)
-            s = pygame.Surface(aura_rect.size, pygame.SRCALPHA)
-            s.fill(COLOR_RIO + (50,))
-            self.background_surface.blit(s, aura_rect.topleft)
-
-        # --- Dibujo principal del terreno ---
-        for selva in ecosistema.terreno["selvas"]:
-            pygame.draw.rect(self.background_surface, COLOR_SELVA, selva.rect)
-        for rio in ecosistema.terreno["rios"]:
-            pygame.draw.rect(self.background_surface, tuple(max(0, c-40) for c in COLOR_RIO), rio.rect, 3)
-            pygame.draw.rect(self.background_surface, COLOR_RIO, rio.rect)
-
-        # --- Dibujo de decoraciones ---
-        if self.sprites and "arbol" in self.sprites:
-            for x, y in ecosistema.terreno["arboles"]:
-                sprite = self.sprites["arbol"]
-                self.background_surface.blit(sprite, (x - sprite.get_width() // 2, y - sprite.get_height() // 2))
-        if self.sprites and "planta" in self.sprites:
-            for x, y in ecosistema.terreno["plantas"]:
-                sprite = self.sprites["planta"]
-                self.background_surface.blit(sprite, (x - sprite.get_width() // 2, y - sprite.get_height() // 2))
-        self.needs_static_redraw = False
-    
-    def _draw_recursos(self, ecosistema):
-        pez_sprite = self.sprites.get("Pez") if self.sprites else None
-        for rio in ecosistema.terreno["rios"]:
-            for pez in rio.peces:
-                if not pez.fue_comido:
-                    if pez_sprite:
-                        self.screen.blit(pez_sprite, (pez.x - pez_sprite.get_width() // 2, pez.y - pez_sprite.get_height() // 2))
-                    else:
-                        pygame.draw.circle(self.screen, COLOR_PEZ, (pez.x, pez.y), 3)
-
-        for carcasa in ecosistema.recursos["carcasas"]:
-            alpha = max(0, 255 - carcasa.dias_descomposicion * 50)
-            temp_surface = pygame.Surface((10, 10), pygame.SRCALPHA)
-            pygame.draw.circle(temp_surface, COLOR_CARCASA + (alpha,), (5, 5), 5)
-            self.screen.blit(temp_surface, (carcasa.x - 5, carcasa.y - 5))
+    def _update_water_animation(self):
+        """Actualiza el frame de la animación del agua basado en el tiempo."""
+        if not self.agua_texturas:
+            return
+        current_time = pygame.time.get_ticks()
+        time_per_frame = self.tiempo_animacion_agua
+        if current_time - self.ultimo_cambio_agua > time_per_frame:
+            self.ultimo_cambio_agua = current_time
+            self.agua_frame_actual = (self.agua_frame_actual + 1) % len(self.agua_texturas)
 
     def _draw_animales(self, ecosistema, animal_seleccionado):
         if self.sprites:
@@ -314,6 +300,10 @@ class PygameView:
 
     def _draw_ui(self, ecosistema, animal_seleccionado, sim_speed):
         ui_x = SIM_WIDTH + 10
+        # Dibujar el fondo del panel de UI para limpiar el texto anterior
+        ui_rect = pygame.Rect(SIM_WIDTH, 0, UI_WIDTH, SCREEN_HEIGHT)
+        pygame.draw.rect(self.screen, COLOR_BACKGROUND, ui_rect)
+
         hora_str = str(ecosistema.hora_actual).zfill(2)
         self._draw_text(f"DÍA: {ecosistema.dia_total} - {hora_str}:00", self.font_header, COLOR_TEXT, self.screen, ui_x, 5)
 
@@ -365,6 +355,66 @@ class PygameView:
             self._draw_text("para ver sus detalles.", self.font_small, COLOR_TEXT, self.screen, ui_x, y_offset)
 
         self.graph.draw(self.screen)
+
+    def _create_static_background(self, ecosistema):
+        """Dibuja todos los elementos estáticos del terreno en una superficie para optimizar el renderizado."""
+        # Colores y texturas de fondo
+        self.background_surface.fill(COLOR_SIM_AREA)
+        if self.terrain_textures.get("fondo"):
+            self._draw_tiled_texture(self.background_surface, self.terrain_textures["fondo"], self.background_surface.get_rect())
+
+        # Dibujar terrenos con texturas o colores sólidos
+        for tipo_terreno, datos in {
+            "praderas": {"texture": self.terrain_textures.get("pradera"), "color": (144, 238, 144)},
+            "selvas": {"texture": self.terrain_textures.get("selva"), "color": COLOR_SELVA},
+            "santuarios": {"texture": self.terrain_textures.get("santuario"), "color": (218, 165, 32)},
+            "montanas": {"texture": self.terrain_textures.get("montana"), "color": (139, 137, 137)}
+        }.items():
+            for terreno in ecosistema.terreno[tipo_terreno]:
+                if datos["texture"]:
+                    self._draw_tiled_texture(self.background_surface, datos["texture"], terreno.rect)
+                else:
+                    pygame.draw.rect(self.background_surface, datos["color"], terreno.rect)
+
+        # Dibujar ríos (la animación se gestionará por separado)
+        self._update_water_animation()
+        for rio in ecosistema.terreno["rios"]:
+            if self.agua_texturas:
+                self._draw_tiled_texture(self.background_surface, self.agua_texturas[self.agua_frame_actual], rio.rect)
+            else:
+                pygame.draw.rect(self.background_surface, COLOR_RIO, rio.rect)
+
+        # Dibujar decoraciones estáticas (árboles, plantas)
+        for x, y in ecosistema.terreno["arboles"]:
+            sprite = self.sprites.get("arbol")
+            if sprite: self.background_surface.blit(sprite, (x - sprite.get_width()//2, y - sprite.get_height()//2))
+        for x, y in ecosistema.terreno["plantas"]:
+            sprite = self.sprites.get("planta")
+            if sprite: self.background_surface.blit(sprite, (x - sprite.get_width()//2, y - sprite.get_height()//2))
+
+        self.needs_static_redraw = False
+
+    def update_hierba_surface(self, ecosistema):
+        """Renderiza la hierba en su propia superficie transparente."""
+        self.hierba_surface.fill((0, 0, 0, 0)) # Limpiar la superficie con transparencia
+        hierba_sprite = self.sprites.get("hierba") if self.sprites else None
+        for gx in range(ecosistema.grid_width):
+            for gy in range(ecosistema.grid_height):
+                valor_hierba = ecosistema.grid_hierba[gx][gy]
+                if valor_hierba > 5:
+                    alpha = min(255, int((valor_hierba / MAX_HIERBA_PRADERA) * 255))
+                    if hierba_sprite:
+                        temp_sprite = hierba_sprite.copy()
+                        temp_sprite.set_alpha(alpha)
+                        self.hierba_surface.blit(temp_sprite, (gx * CELL_SIZE, gy * CELL_SIZE))
+
+    def _draw_recursos(self, ecosistema):
+        """Dibuja recursos dinámicos como carcasas y peces."""
+        for carcasa in ecosistema.recursos["carcasas"]:
+            alpha = max(0, 255 - carcasa.dias_descomposicion * 50)
+            temp_surface = pygame.Surface((10, 10), pygame.SRCALPHA)
+            pygame.draw.circle(temp_surface, COLOR_CARCASA + (alpha,), (5, 5), 5)
+            self.screen.blit(temp_surface, (carcasa.x - 5, carcasa.y - 5))
 
     def draw_simulation(self, ecosistema, sim_over, animal_seleccionado, sim_speed):
         self.screen.fill(COLOR_BACKGROUND)
@@ -436,8 +486,6 @@ class SimulationController:
         self.base_time_per_hour = 25   # Reducido para mejor respuesta
         self.last_update_time = pygame.time.get_ticks()
         self.clock = pygame.time.Clock()
-
-        self.next_day_cooldown = 50  # Reducido para mejor respuesta
 
     def _poblar_ecosistema(self):
         tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto]
@@ -525,8 +573,6 @@ class SimulationController:
     def _action_toggle_pause(self): self.paused = not self.paused
     def _action_advance_day(self):
         if self.ecosistema.dia_total < self.dias_simulacion and self.ecosistema.animales:
-            # Hacer más lento el avance manual del día
-            self.next_day_cooldown = 400  # Era 250
             return self._avanzar_dia()
         return True  # La simulación ya ha terminado o no hay animales
 

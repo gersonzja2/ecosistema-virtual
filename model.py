@@ -401,15 +401,11 @@ class Animal(ABC):
         return None
 
     def _encontrar_rio_cercano(self, ecosistema):
-        mejor_rio = None
-        menor_dist_sq = float('inf')
-        for rio in ecosistema.terreno["rios"]:
-            # Usar distancia al cuadrado para evitar el costoso cálculo de la raíz cuadrada
-            dist_sq = (self.x - rio.rect.centerx)**2 + (self.y - rio.rect.centery)**2
-            if dist_sq < menor_dist_sq:
-                menor_dist_sq = dist_sq
-                mejor_rio = rio
-        return mejor_rio
+        # --- OPTIMIZACIÓN: Usar la caché de terreno pre-calculada ---
+        grid_x, grid_y = int(self.x // CELL_SIZE), int(self.y // CELL_SIZE)
+        if (grid_x, grid_y) in ecosistema.terrain_cache["rio"]:
+            return ecosistema.terrain_cache["rio"][(grid_x, grid_y)]
+        return None
 
     def _encontrar_selva_cercana(self, ecosistema):
         mejor_selva = None
@@ -420,7 +416,12 @@ class Animal(ABC):
                 if dist_sq < menor_dist_sq:
                     menor_dist_sq = dist_sq
                     mejor_selva = selva
-        return mejor_selva, menor_dist_sq
+        # --- OPTIMIZACIÓN: Usar la caché de terreno pre-calculada ---
+        grid_x, grid_y = int(self.x // CELL_SIZE), int(self.y // CELL_SIZE)
+        if (grid_x, grid_y) in ecosistema.terrain_cache["selva"]:
+            selva_cercana, dist_sq = ecosistema.terrain_cache["selva"][(grid_x, grid_y)]
+            if selva_cercana.bayas > 10: return selva_cercana, dist_sq
+        return None, float('inf')
 
     def envejecer(self, ecosistema: 'Ecosistema') -> str:
         self._edad += 1
@@ -493,10 +494,11 @@ class Herbivoro(Animal):
 
     def beber(self, ecosistema: 'Ecosistema') -> str:
         if self._sed > 50:
-            for rio in ecosistema.terreno["rios"]:
-                if rio.rect.collidepoint(self.x, self.y):
-                    self._sed = max(0, self._sed - 75)
-                    return f"{self.nombre} bebió agua."
+            # --- OPTIMIZACIÓN: Comprobar si la celda actual es un río usando la caché ---
+            grid_x, grid_y = int(self.x // CELL_SIZE), int(self.y // CELL_SIZE)
+            if ecosistema.is_river[grid_x][grid_y]:
+                self._sed = max(0, self._sed - 75)
+                return f"{self.nombre} bebió agua."
         return ""
 
 class Carnivoro(Animal):
@@ -526,10 +528,11 @@ class Carnivoro(Animal):
 
     def beber(self, ecosistema: 'Ecosistema') -> str:
         if self._sed > 50:
-            for rio in ecosistema.terreno["rios"]:
-                if rio.rect.collidepoint(self.x, self.y):
-                    self._sed = max(0, self._sed - 75)
-                    return f"{self.nombre} bebió agua."
+            # --- OPTIMIZACIÓN: Comprobar si la celda actual es un río usando la caché ---
+            grid_x, grid_y = int(self.x // CELL_SIZE), int(self.y // CELL_SIZE)
+            if ecosistema.is_river[grid_x][grid_y]:
+                self._sed = max(0, self._sed - 75)
+                return f"{self.nombre} bebió agua."
         return ""
 
 class Omnivoro(Animal):
@@ -567,10 +570,11 @@ class Omnivoro(Animal):
 
     def beber(self, ecosistema: 'Ecosistema') -> str:
         if self._sed > 50:
-            for rio in ecosistema.terreno["rios"]:
-                if rio.rect.collidepoint(self.x, self.y):
-                    self._sed = max(0, self._sed - 75)
-                    return f"{self.nombre} bebió agua."
+            # --- OPTIMIZACIÓN: Comprobar si la celda actual es un río usando la caché ---
+            grid_x, grid_y = int(self.x // CELL_SIZE), int(self.y // CELL_SIZE)
+            if ecosistema.is_river[grid_x][grid_y]:
+                self._sed = max(0, self._sed - 75)
+                return f"{self.nombre} bebió agua."
         return ""
 
 # --- Clases de Animales Específicos ---
@@ -663,6 +667,8 @@ class Ecosistema:
                 Selva((550, 50, 200, 200)),
                 Selva((20, 200, 120, 150))
             ],
+            "montanas": [],
+            "santuarios": [],
             "arboles": [],
             "plantas": [],
         }
@@ -673,13 +679,17 @@ class Ecosistema:
         self.grid_width = SIM_WIDTH // CELL_SIZE
         self.grid_height = SCREEN_HEIGHT // CELL_SIZE
         self.grid_hierba = [[0 for _ in range(self.grid_height)] for _ in range(self.grid_width)]
+        # --- OPTIMIZACIÓN: Pre-calcular qué celdas son ríos ---
+        self.is_river = [[False for _ in range(self.grid_height)] for _ in range(self.grid_width)]
 
         for gx in range(self.grid_width):
             for gy in range(self.grid_height):
                 cell_rect = pygame.Rect(gx * CELL_SIZE, gy * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-                # --- CORRECCIÓN: Usar colliderect para una detección precisa ---
+                
                 if any(rio.rect.colliderect(cell_rect) for rio in self.terreno["rios"]):
                     self.grid_hierba[gx][gy] = 0
+                    # Marcar esta celda como río para futuras comprobaciones rápidas
+                    self.is_river[gx][gy] = True
                     continue
 
                 max_val = MAX_HIERBA_NORMAL
@@ -706,6 +716,10 @@ class Ecosistema:
         self.grid_animales = {}  # Diccionario para optimizar la búsqueda de animales cercanos
 
         self._poblar_decoraciones()
+        
+        # --- OPTIMIZACIÓN: Pre-calcular la caché de terrenos cercanos ---
+        self.terrain_cache = {"rio": {}, "selva": {}}
+        self._precalcular_terrenos_cercanos()
 
     def choca_con_terreno(self, x, y):
         radio_tronco = 5
@@ -761,6 +775,32 @@ class Ecosistema:
                 if not self.choca_con_terreno(x,y) and self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=20):
                     self.terreno["plantas"].append((x, y)); decoraciones_todas.append((x, y))
                     break
+
+    def _precalcular_terrenos_cercanos(self):
+        """
+        OPTIMIZACIÓN: Para cada celda del grid, calcula el río y la selva más cercanos.
+        Esto evita que cada animal tenga que recalcularlo en cada ciclo.
+        """
+        print("Pre-calculando caché de terrenos cercanos para optimización...")
+        for gx in range(self.grid_width):
+            for gy in range(self.grid_height):
+                x, y = gx * CELL_SIZE, gy * CELL_SIZE
+                
+                # Encontrar el río más cercano
+                mejor_rio, menor_dist_rio_sq = None, float('inf')
+                for rio in self.terreno["rios"]:
+                    dist_sq = (x - rio.rect.centerx)**2 + (y - rio.rect.centery)**2
+                    if dist_sq < menor_dist_rio_sq:
+                        menor_dist_rio_sq, mejor_rio = dist_sq, rio
+                if mejor_rio: self.terrain_cache["rio"][(gx, gy)] = mejor_rio
+
+                # Encontrar la selva más cercana
+                mejor_selva, menor_dist_selva_sq = None, float('inf')
+                for selva in self.terreno["selvas"]:
+                    dist_sq = (x - selva.rect.centerx)**2 + (y - selva.rect.centery)**2
+                    if dist_sq < menor_dist_selva_sq:
+                        menor_dist_selva_sq, mejor_selva = dist_sq, selva
+                if mejor_selva: self.terrain_cache["selva"][(gx, gy)] = (mejor_selva, menor_dist_selva_sq)
 
     def _actualizar_estacion(self):
         indice_estacion = (self.dia_total // self.dias_por_estacion) % 4
@@ -837,9 +877,8 @@ class Ecosistema:
 
             for gx in range(self.grid_width):
                 for gy in range(self.grid_height):
-                    cell_rect = pygame.Rect(gx * CELL_SIZE, gy * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-                    # --- CORRECCIÓN: Usar colliderect para una detección precisa ---
-                    if any(rio.rect.colliderect(cell_rect) for rio in self.terreno["rios"]):
+                    # --- OPTIMIZACIÓN: Usar la matriz pre-calculada 'is_river' ---
+                    if self.is_river[gx][gy]:
                         self.grid_hierba[gx][gy] = 0
                         continue
 
@@ -849,7 +888,8 @@ class Ecosistema:
                     max_capacidad = MAX_HIERBA_NORMAL
                     tasa_crecimiento_base = 1
                     
-                    pradera_actual = next((p for p in self.terreno["praderas"] if p.rect.colliderect(cell_rect)), None)
+                    cell_rect = pygame.Rect(gx * CELL_SIZE, gy * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                    pradera_actual = next((p for p in self.terreno["praderas"] if p.rect.colliderect(cell_rect)), None) # colliderect es necesario aquí
                     if pradera_actual: # No es necesario comprobar si choca con el río aquí, ya se hizo arriba
                         max_capacidad = pradera_actual.max_hierba
                         tasa_crecimiento_base = pradera_actual.tasa_crecimiento
@@ -920,6 +960,10 @@ class Ecosistema:
         self.grid_hierba = estado.get("grid_hierba", self.grid_hierba)
         for i, s_data in enumerate(estado["selvas"]):
             self.terreno["selvas"][i].bayas = s_data["bayas"]
+        
+        # --- OPTIMIZACIÓN: Recalcular caché de terreno al cargar ---
+        self._precalcular_terrenos_cercanos()
+
         for i, r_data in enumerate(estado.get("rios", [])):
             rio = self.terreno["rios"][i]
             rio.peces = []
