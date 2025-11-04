@@ -1,7 +1,7 @@
 import pygame
 import random
 from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, Halcon, Insecto, CELL_SIZE, MAX_HIERBA_PRADERA, Rio, Pez
-
+##
 SCREEN_WIDTH = 1200
 SCREEN_HEIGHT = 700
 SIM_WIDTH = 800
