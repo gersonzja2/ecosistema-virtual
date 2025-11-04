@@ -1,0 +1,175 @@
+{
+    "dia_total": 50,
+    "recursos": {
+        "hierba": 0
+    },
+    "selvas": [
+        {
+            "rect": [
+                200,
+                450,
+                250,
+                180
+            ],
+            "bayas": 119
+        }
+    ],
+    "animales": [
+        {
+            "tipo": "Herbivoro",
+            "nombre": "Herbivor 62",
+            "x": 277.93029288493193,
+            "y": 533.8476034479152,
+            "edad": 11,
+            "energia": 49,
+            "sed": 55,
+            "genes": {
+                "max_energia": 95,
+                "rango_vision": 114
+            }
+        },
+        {
+            "tipo": "Herbivoro",
+            "nombre": "Herbivor 78",
+            "x": 268.8074460177677,
+            "y": 502.63570009410176,
+            "edad": 7,
+            "energia": 42,
+            "sed": 35,
+            "genes": {
+                "max_energia": 116,
+                "rango_vision": 117
+            }
+        },
+        {
+            "tipo": "Herbivoro",
+            "nombre": "Herbivor 71",
+            "x": 340.2931442714131,
+            "y": 546.0469126662141,
+            "edad": 9,
+            "energia": 34,
+            "sed": 45,
+            "genes": {
+                "max_energia": 109,
+                "rango_vision": 116
+            }
+        },
+        {
+            "tipo": "Herbivoro",
+            "nombre": "Herbivor 42",
+            "x": 664.2455570881318,
+            "y": 78.95029640393395,
+            "edad": 15,
+            "energia": 48,
+            "sed": 75,
+            "genes": {
+                "max_energia": 108,
+                "rango_vision": 72
+            }
+        },
+        {
+            "tipo": "Herbivoro",
+            "nombre": "Herbivor 54",
+            "x": 634.4053731771085,
+            "y": 652.7088116459876,
+            "edad": 13,
+            "energia": 32,
+            "sed": 65,
+            "genes": {
+                "max_energia": 98,
+                "rango_vision": 84
+            }
+        },
+        {
+            "tipo": "Herbivoro",
+            "nombre": "Herbivor 39",
+            "x": 336.36477665515963,
+            "y": 495.8197790865906,
+            "edad": 18,
+            "energia": 21,
+            "sed": 90,
+            "genes": {
+                "max_energia": 98,
+                "rango_vision": 97
+            }
+        },
+        {
+            "tipo": "Herbivoro",
+            "nombre": "Herbivor 57",
+            "x": 315.11426933113336,
+            "y": 475.9408008861304,
+            "edad": 12,
+            "energia": 36,
+            "sed": 60,
+            "genes": {
+                "max_energia": 102,
+                "rango_vision": 109
+            }
+        },
+        {
+            "tipo": "Herbivoro",
+            "nombre": "Herbivor 58",
+            "x": 648.549206392186,
+            "y": 78.58987416575323,
+            "edad": 12,
+            "energia": 46,
+            "sed": 60,
+            "genes": {
+                "max_energia": 112,
+                "rango_vision": 82
+            }
+        },
+        {
+            "tipo": "Herbivoro",
+            "nombre": "Herbivor 80",
+            "x": 274.27064774119606,
+            "y": 367.8926229848717,
+            "edad": 6,
+            "energia": 36,
+            "sed": 20,
+            "genes": {
+                "max_energia": 110,
+                "rango_vision": 102
+            }
+        },
+        {
+            "tipo": "Herbivoro",
+            "nombre": "Herbivor 68",
+            "x": 296.2982008398616,
+            "y": 343.33637364923567,
+            "edad": 10,
+            "energia": 11,
+            "sed": 0,
+            "genes": {
+                "max_energia": 103,
+                "rango_vision": 112
+            }
+        },
+        {
+            "tipo": "Herbivoro",
+            "nombre": "Herbivor 77",
+            "x": 306.85806953116264,
+            "y": 489.70277141966744,
+            "edad": 8,
+            "energia": 28,
+            "sed": 40,
+            "genes": {
+                "max_energia": 109,
+                "rango_vision": 108
+            }
+        },
+        {
+            "tipo": "Herbivoro",
+            "nombre": "Herbivor 79",
+            "x": 317.60525685858204,
+            "y": 346.6770018589315,
+            "edad": 7,
+            "energia": 22,
+            "sed": 0,
+            "genes": {
+                "max_energia": 106,
+                "rango_vision": 94
+            }
+        }
+    ]
+}
