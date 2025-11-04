@@ -4,5 +4,5 @@ registro de avances par ecocistema virtual
 31-10-2025
 
 - se realizo mejoras en las texturas del entorno, tales como: praderas, santuario, etc. para ello se escogio imagenes con temática pixel art, las cuales encajan perfectamente con la dinámica del juegp
-
+- se mejora la animación del agua 
 

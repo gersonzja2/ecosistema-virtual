@@ -329,6 +329,17 @@ class PygameView:
         self.graph.draw(self.screen)
 
     def _create_static_background(self, ecosistema):
+        """Crea la superficie de fondo con elementos que no cambian (terreno, decoraciones)."""
+        self.background_surface.fill(COLOR_SIM_AREA)
+        if self.terrain_textures.get("fondo"):
+            self._draw_tiled_texture(self.background_surface, self.terrain_textures["fondo"], self.background_surface.get_rect())
+
+        self._draw_terrenos_estaticos(ecosistema)
+        self._draw_decoraciones(ecosistema)
+
+        self.needs_static_redraw = False
+
+    def _draw_terrenos_estaticos(self, ecosistema):
         self.background_surface.fill(COLOR_SIM_AREA)
         if self.terrain_textures.get("fondo"):
             self._draw_tiled_texture(self.background_surface, self.terrain_textures["fondo"], self.background_surface.get_rect())
@@ -345,21 +356,23 @@ class PygameView:
                 else:
                     pygame.draw.rect(self.background_surface, datos["color"], terreno.rect)
 
+    def _draw_rios(self, ecosistema):
+        """Dibuja los ríos, actualizando la animación del agua."""
         self._update_water_animation()
         for rio in ecosistema.terreno["rios"]:
             if self.agua_texturas:
-                self._draw_tiled_texture(self.background_surface, self.agua_texturas[self.agua_frame_actual], rio.rect)
+                self._draw_tiled_texture(self.screen, self.agua_texturas[self.agua_frame_actual], rio.rect)
             else:
-                pygame.draw.rect(self.background_surface, COLOR_RIO, rio.rect)
+                pygame.draw.rect(self.screen, COLOR_RIO, rio.rect)
 
+    def _draw_decoraciones(self, ecosistema):
+        """Dibuja elementos de decoración como árboles y plantas sobre el fondo estático."""
         for x, y in ecosistema.terreno["arboles"]:
             sprite = self.sprites.get("arbol")
             if sprite: self.background_surface.blit(sprite, (x - sprite.get_width()//2, y - sprite.get_height()//2))
         for x, y in ecosistema.terreno["plantas"]:
             sprite = self.sprites.get("planta")
             if sprite: self.background_surface.blit(sprite, (x - sprite.get_width()//2, y - sprite.get_height()//2))
-
-        self.needs_static_redraw = False
 
     def update_hierba_surface(self, ecosistema):
         self.hierba_surface.fill((0, 0, 0, 0))
@@ -388,6 +401,7 @@ class PygameView:
             self._create_static_background(ecosistema)
 
         self.screen.blit(self.background_surface, (0, 0))
+        self._draw_rios(ecosistema)
         self.screen.blit(self.hierba_surface, (0, 0))
         self._draw_recursos(ecosistema)
         
