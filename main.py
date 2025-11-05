@@ -1,10 +1,8 @@
 import pygame
 import random
-from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, Halcon, Insecto, CELL_SIZE, MAX_HIERBA_PRADERA, Rio, Pez
+from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, Halcon, Insecto, Rio, Pez, CELL_SIZE, MAX_HIERBA_PRADERA, SIM_WIDTH, SCREEN_HEIGHT
 
 SCREEN_WIDTH = 1200
-SCREEN_HEIGHT = 700
-SIM_WIDTH = 800
 UI_WIDTH = 400
 COLOR_BACKGROUND = (22, 160, 133)
 COLOR_SIM_AREA = (46, 204, 113)
@@ -147,6 +145,30 @@ class PygameView:
             except (pygame.error, FileNotFoundError):
                 print(f"ADVERTENCIA: No se pudo cargar el sprite '{data['file']}'. Se usará un marcador de posición si es necesario.")
         
+        # Carga especial para el puente para mantener la relación de aspecto
+        try:
+            puente_img = pygame.image.load("assets/textura_puente.png")
+            original_width, original_height = puente_img.get_size()
+            target_height = 70  # Queremos que el puente sea un poco más alto que el río (60px)
+            aspect_ratio = original_width / original_height
+            target_width = int(target_height * aspect_ratio)
+            sprites["puente"] = pygame.transform.scale(puente_img, (target_width, target_height))
+        except (pygame.error, FileNotFoundError):
+            print("ADVERTENCIA: No se pudo cargar el sprite 'textura_puente.png'.")
+
+        # Carga especial para el puente horizontal, rotando la textura
+        # La imagen textura_puente2.png ya es horizontal, así que no la rotamos.
+        try:
+            puente_h_img = pygame.image.load("assets/textura_puente2.png")
+            original_width, original_height = puente_h_img.get_size()
+            target_height = 70 # Queremos que el puente tenga una altura de 70px para cruzar el río de 60px
+            aspect_ratio = original_width / original_height # Aspecto original de la imagen horizontal
+            target_width = int(target_height * aspect_ratio) # Calculamos el ancho proporcional
+            sprites["puente_horizontal"] = pygame.transform.scale(puente_h_img, (target_width, target_height))
+        except (pygame.error, FileNotFoundError):
+            print("ADVERTENCIA: No se pudo cargar el sprite 'textura_puente2.png' para el puente horizontal.")
+
+
         if not sprites:
             print("\n--- ADVERTENCIA GENERAL: No se encontró ningún archivo de sprite en la carpeta 'assets' ---")
             print("La simulación usará círculos de colores para todos los animales.")
@@ -157,7 +179,9 @@ class PygameView:
         texture_files = {
             "fondo": "textura_fondo.png",
             "montana": "textura_montana.png",
-            "santuario": "textura_santuario.png"
+            "santuario": "textura_santuario.png",
+            "selva": "textura_selva.png",
+            "pradera": "textura_pradera.png"
         }
         for name, filename in texture_files.items():
             try:
@@ -337,21 +361,21 @@ class PygameView:
         self.needs_static_redraw = False
 
     def _draw_terrenos_estaticos(self, ecosistema):
-        self.background_surface.fill(COLOR_SIM_AREA)
-        if self.terrain_textures.get("fondo"):
-            self._draw_tiled_texture(self.background_surface, self.terrain_textures["fondo"], self.background_surface.get_rect())
+        """Dibuja las texturas de fondo y luego las áreas de terreno específicas."""
+        # 1. Dibuja la textura de fondo general en toda la superficie de la simulación.
+        fondo_texture = self.terrain_textures.get("fondo")
+        if fondo_texture:
+            self._draw_tiled_texture(self.background_surface, fondo_texture, self.background_surface.get_rect())
 
-        for tipo_terreno, datos in {
-            "praderas": {"texture": self.terrain_textures.get("fondo"), "color": (144, 238, 144)},
-            "selvas": {"texture": self.terrain_textures.get("fondo"), "color": COLOR_SELVA},
-            "santuarios": {"texture": self.terrain_textures.get("santuario"), "color": (218, 165, 32)},
-            "montanas": {"texture": self.terrain_textures.get("montana"), "color": (139, 137, 137)}
-        }.items():
-            for terreno in ecosistema.terreno[tipo_terreno]:
-                if datos["texture"]:
-                    self._draw_tiled_texture(self.background_surface, datos["texture"], terreno.rect)
-                else:
-                    pygame.draw.rect(self.background_surface, datos["color"], terreno.rect)
+        # 2. Dibuja cada área de terreno específica sobre el fondo.
+        # El orden aquí importa: las selvas se dibujarán encima de las praderas si se superponen.
+        terrain_types_to_draw = ["praderas", "selvas", "santuarios", "montanas"]
+
+        for terrain_name in terrain_types_to_draw:
+            texture = self.terrain_textures.get(terrain_name[:-1]) # "praderas" -> "pradera"
+            if texture:
+                for terreno_obj in ecosistema.terreno[terrain_name]:
+                    self._draw_tiled_texture(self.background_surface, texture, terreno_obj.rect)
 
     def _draw_rios(self, ecosistema):
         """Dibuja los ríos, actualizando la animación del agua."""
@@ -361,6 +385,24 @@ class PygameView:
                 self._draw_tiled_texture(self.screen, self.agua_texturas[self.agua_frame_actual], rio.rect)
             else:
                 pygame.draw.rect(self.screen, COLOR_RIO, rio.rect)
+
+    def _draw_puentes(self, ecosistema):
+        """Dibuja los puentes sobre el mapa."""
+        sprite_puente_v = self.sprites.get("puente") # Textura para puentes verticales
+        sprite_puente_h = self.sprites.get("puente_horizontal") # Textura para puentes horizontales
+        center_x = SIM_WIDTH // 2
+
+        for x, y in ecosistema.terreno["puentes"]:
+            # Si la coordenada X del puente es la del centro + 1, es el puente superior (horizontal).
+            if x == center_x + 2 and sprite_puente_h:
+                sprite_a_usar = sprite_puente_h
+            # Para todos los demás puentes, usamos la textura vertical.
+            elif sprite_puente_v:
+                sprite_a_usar = sprite_puente_v
+            else:
+                continue # Si no hay sprites, no dibujamos nada.
+            
+            self.screen.blit(sprite_a_usar, (x - sprite_a_usar.get_width() // 2, y - sprite_a_usar.get_height() // 2))
 
     def _draw_decoraciones(self, ecosistema):
         """Dibuja elementos de decoración como árboles y plantas sobre el fondo estático."""
@@ -399,6 +441,7 @@ class PygameView:
 
         self.screen.blit(self.background_surface, (0, 0))
         self._draw_rios(ecosistema)
+        self._draw_puentes(ecosistema)
         self.screen.blit(self.hierba_surface, (0, 0))
         self._draw_recursos(ecosistema)
         

@@ -10,6 +10,7 @@ CELL_SIZE = 20
 MAX_HIERBA_NORMAL = 70
 BORDE_MARGEN = 20 # Margen de seguridad para que los animales no se acerquen a los bordes
 MAX_HIERBA_PRADERA = 120
+
 class Terreno:
     def __init__(self, rect):
         self.rect = pygame.Rect(rect)
@@ -208,6 +209,7 @@ class Ecosistema:
             "santuarios": [],
             "arboles": [],
             "plantas": [],
+            "puentes": []
         }
         self.recursos = {
             "carcasas": []
@@ -215,6 +217,7 @@ class Ecosistema:
         self.grid_width = SIM_WIDTH // CELL_SIZE
         self.grid_height = SCREEN_HEIGHT // CELL_SIZE
         self.grid_hierba = [[0 for _ in range(self.grid_height)] for _ in range(self.grid_width)]
+        self.terrain_grid = [[None for _ in range(self.grid_height)] for _ in range(self.grid_width)]
         self.is_river = [[False for _ in range(self.grid_height)] for _ in range(self.grid_width)]
 
         # Construir ríos nuevos: pool central + brazos hacia esquinas (aproximación con rects)
@@ -238,18 +241,38 @@ class Ecosistema:
         # Añadir a la lista de ríos
         self.terreno["rios"].extend([left_arm, right_arm, top_arm, pool])
 
+        # Añadir puentes en ubicaciones estratégicas sobre los brazos horizontales
+        self.terreno["puentes"].append((150, center_y))
+        self.terreno["puentes"].append((SIM_WIDTH - 150, center_y))
+        self.terreno["puentes"].append((SIM_WIDTH // 4, center_y))
+        self.terreno["puentes"].append((center_x + 2, 150)) # Nuevo puente en el río superior, movido 2px a la derecha
+
+        # Establecer la jerarquía de terrenos (el primero tiene más prioridad)
+        terrain_hierarchy = [
+            ("montanas", "montana"),
+            ("santuarios", "santuario"),
+            ("selvas", "selva"),
+            ("praderas", "pradera")
+        ]
+
         for gx in range(self.grid_width):
             for gy in range(self.grid_height):
                 cell_rect = pygame.Rect(gx * CELL_SIZE, gy * CELL_SIZE, CELL_SIZE, CELL_SIZE)
                 
                 if any(rio.rect.colliderect(cell_rect) for rio in self.terreno["rios"]):
                     self.grid_hierba[gx][gy] = 0
+                    self.terrain_grid[gx][gy] = "rio" # Marcar como río
                     self.is_river[gx][gy] = True
                     continue
 
-                max_val = MAX_HIERBA_NORMAL
-                if any(p.rect.colliderect(cell_rect) for p in self.terreno["praderas"]):
-                    max_val = MAX_HIERBA_PRADERA
+                # Asignar tipo de terreno basado en la jerarquía
+                for terrain_list_name, terrain_type_name in terrain_hierarchy:
+                    if any(t.rect.colliderect(cell_rect) for t in self.terreno[terrain_list_name]):
+                        self.terrain_grid[gx][gy] = terrain_type_name
+                        break
+                
+                # Calcular hierba inicial
+                max_val = MAX_HIERBA_PRADERA if self.terrain_grid[gx][gy] == "pradera" else MAX_HIERBA_NORMAL
                 self.grid_hierba[gx][gy] = random.randint(0, max_val)
 
         self.dia_total = 1
