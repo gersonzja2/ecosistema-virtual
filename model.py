@@ -196,14 +196,7 @@ class Ecosistema:
                 Pradera((20, 560, 180, 120)),
                 Pradera((650, 550, 130, 130))  
             ],
-            "rios": [
-                Rio((150, 0, 40, 300)),
-                Rio((150, 150, 100, 40)),
-                Rio((450, 0, 40, 250)),
-                Rio((450, 210, 200, 40)),
-                Rio((610, 210, 40, 490)),     # Río principal vertical
-                Rio((0, 400, 610, 40))       # Afluente oeste
-            ],
+            "rios": [],
             "selvas": [
                 Selva((200, 450, 250, 180)),
                 Selva((20, 20, 100, 100)),
@@ -238,6 +231,31 @@ class Ecosistema:
         self.grid_height = SCREEN_HEIGHT // CELL_SIZE
         self.grid_hierba = [[0 for _ in range(self.grid_height)] for _ in range(self.grid_width)]
         self.is_river = [[False for _ in range(self.grid_height)] for _ in range(self.grid_width)]
+
+        # Construir ríos nuevos: pool central + brazos hacia esquinas (aproximación con rects)
+        # Parámetros geométricos
+        center_x = SIM_WIDTH // 2
+        center_y = SCREEN_HEIGHT // 2
+        thickness = 60
+
+        # Área central donde confluyen los ríos
+        pool = Rio((center_x - thickness // 2, center_y - thickness // 2, thickness, thickness))
+
+        # Brazo izquierdo horizontal: desde el borde izquierdo hasta la izquierda del pool
+        left_arm = Rio((0, center_y - thickness // 2, center_x - thickness // 2, thickness))
+
+        # Brazo derecho horizontal: desde la derecha del pool hasta el borde derecho
+        right_arm = Rio((center_x + thickness // 2, center_y - thickness // 2, SIM_WIDTH - (center_x + thickness // 2), thickness))
+
+        # Brazo superior vertical: desde el borde superior hasta la parte superior del pool
+        top_arm = Rio((center_x - thickness // 2, 0, thickness, center_y - thickness // 2))
+
+        # Brazo inferior-izquierdo: corriente que surge desde la esquina inferior izquierda
+        # (vertical hacia arriba hasta tocar la franja horizontal izquierda)
+        bottom_left_vertical = Rio((0, center_y + thickness // 2, thickness, SCREEN_HEIGHT - (center_y + thickness // 2)))
+
+        # Añadir a la lista de ríos; el orden puede cambiar, pero todos confluyen visualmente en el pool
+        self.terreno["rios"].extend([left_arm, right_arm, top_arm, bottom_left_vertical, pool])
 
         for gx in range(self.grid_width):
             for gy in range(self.grid_height):
