@@ -87,6 +87,7 @@ class Animal(ABC):
             max_energia = max(80, min(120, 100 + random.randint(-10, 10)))
         self.max_energia = max_energia
         self._energia = max(0, min(energia, self.max_energia))
+        self.estado = "deambulando"
         
         type(self).contador = getattr(type(self), 'contador', 0) + 1
 
@@ -216,6 +217,20 @@ class Ecosistema:
             "arboles": [],
             "plantas": [],
         }
+        self.zonas_habitat = {
+            Conejo: [pygame.Rect(20, 400, 150, 150), pygame.Rect(300, 50, 250, 100)],
+            Raton: [pygame.Rect(50, 50, 100, 150), pygame.Rect(250, 200, 200, 50)],
+            Cabra: [pygame.Rect(600, 400, 150, 120), pygame.Rect(20, 560, 180, 120)],
+            Insecto: [pygame.Rect(20, 200, 120, 150), pygame.Rect(20, 20, 100, 100)],
+            
+            Leopardo: [pygame.Rect(500, 250, 150, 100)],
+            Gato: [pygame.Rect(20, 20, 100, 100), pygame.Rect(650, 550, 130, 130)],
+            Halcon: [pygame.Rect(700, 20, 80, 250)],
+
+            Cerdo: [pygame.Rect(200, 450, 250, 180)],
+            Mono: [pygame.Rect(550, 50, 200, 200)]
+        }
+
         self.recursos = {
             "carcasas": []
         }
@@ -275,33 +290,38 @@ class Ecosistema:
         self.terreno["arboles"].clear()
         self.terreno["plantas"].clear()
         
-        decoraciones_todas = []
-        intentos_max = 80
-        margen = 5
+        decoraciones_todas = [] # Lista de (x, y) de todas las decoraciones
+        intentos_max_por_item = 50
+        margen = 15 # Margen desde los bordes de la zona
 
+        # Generar árboles en las selvas
         for selva in self.terreno["selvas"]:
-            for _ in range(35):
-                for _ in range(intentos_max):
+            num_arboles = int(selva.rect.width * selva.rect.height / 4000) # Densidad de árboles
+            for _ in range(num_arboles):
+                for _ in range(intentos_max_por_item):
                     x = random.randint(selva.rect.left + margen, selva.rect.right - margen)
                     y = random.randint(selva.rect.top + margen, selva.rect.bottom - margen)
-                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=35):
+                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=25):
                         self.terreno["arboles"].append((x, y)); decoraciones_todas.append((x, y))
                         break
 
+        # Generar plantas en praderas y selvas
         zonas_alimento = self.terreno["praderas"] + self.terreno["selvas"]
         for zona in zonas_alimento:
-            for _ in range(35):
-                for _ in range(intentos_max):
+            num_plantas = int(zona.rect.width * zona.rect.height / 2500) # Densidad de plantas
+            for _ in range(num_plantas):
+                for _ in range(intentos_max_por_item):
                     x = random.randint(zona.rect.left + margen, zona.rect.right - margen)
                     y = random.randint(zona.rect.top + margen, zona.rect.bottom - margen)
-                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=20):
+                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=15):
                         self.terreno["plantas"].append((x, y)); decoraciones_todas.append((x, y))
                         break
 
-        for _ in range(120):
-            for _ in range(intentos_max):
-                x, y = random.randint(0, SIM_WIDTH), random.randint(0, SCREEN_HEIGHT)
-                if not self.choca_con_terreno(x,y) and self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=20):
+        # Generar algunas plantas aleatorias por todo el mapa
+        for _ in range(80): # Número reducido para no saturar
+            for _ in range(intentos_max_por_item):
+                x, y = random.randint(margen, SIM_WIDTH - margen), random.randint(margen, SCREEN_HEIGHT - margen)
+                if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=15):
                     self.terreno["plantas"].append((x, y)); decoraciones_todas.append((x, y))
                     break
 
@@ -403,14 +423,29 @@ class Ecosistema:
         if nombre is None:
             nombre = f"{tipo_animal.__name__} {getattr(tipo_animal, 'contador', 0) + 1}"
 
+        zona_habitat_disponible = self.zonas_habitat.get(tipo_animal)
+        if not zona_habitat_disponible:
+            # Fallback para animales sin zona definida (aunque todos deberían tener)
+            zona_fallback = pygame.Rect(0, 0, SIM_WIDTH, SCREEN_HEIGHT)
+            zona_elegida = zona_fallback
+        else:
+            zona_elegida = random.choice(zona_habitat_disponible)
+
         intentos = 0
+        posicion_valida = False
+        x, y = 0, 0
         while intentos < 100:
-            x = random.randint(20, SIM_WIDTH - 20)
-            y = random.randint(20, SCREEN_HEIGHT - 20)
-            if not self.choca_con_terreno(x, y): break
+            x = random.randint(zona_elegida.left, zona_elegida.right)
+            y = random.randint(zona_elegida.top, zona_elegida.bottom)
+            # Asegurarse de no generar dentro de un árbol o un río
+            if not self.choca_con_terreno(x, y) and not any(rio.rect.collidepoint(x, y) for rio in self.terreno["rios"]):
+                posicion_valida = True
+                break
             intentos += 1
-        nuevo_animal = tipo_animal(nombre, x, y)
-        self.animales.append(nuevo_animal)
+        
+        if posicion_valida:
+            nuevo_animal = tipo_animal(nombre, x, y)
+            self.animales.append(nuevo_animal)
 
     def guardar_estado(self, archivo="save_state.json"):
         estado = {
@@ -454,7 +489,8 @@ class Ecosistema:
             if tipo_clase:
                 max_energia_default = max(80, min(120, 100 + random.randint(-10, 10)))
                 animal = tipo_clase(a_data["nombre"], a_data["x"], a_data["y"], 
-                                    a_data.get("edad", 0), a_data.get("energia", 100), 
+                                    a_data.get("edad", 0), 
+                                    min(a_data.get("energia", 100), a_data.get("max_energia", max_energia_default)), 
                                     max_energia=a_data.get("max_energia", max_energia_default))
                 animal._sed = a_data.get("sed", 0)
                 self.animales.append(animal)
