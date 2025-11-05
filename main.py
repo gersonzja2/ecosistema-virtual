@@ -159,8 +159,6 @@ class PygameView:
         textures = {}
         texture_files = {
             "fondo": "textura_fondo.png",
-            "selva": "textura_selva.png",
-            "pradera": "textura_pradera.png",
             "montana": "textura_montana.png",
             "santuario": "textura_santuario.png"
         }
@@ -329,8 +327,8 @@ class PygameView:
             self._draw_tiled_texture(self.background_surface, self.terrain_textures["fondo"], self.background_surface.get_rect())
 
         for tipo_terreno, datos in {
-            "praderas": {"texture": self.terrain_textures.get("pradera"), "color": (144, 238, 144)},
-            "selvas": {"texture": self.terrain_textures.get("selva"), "color": COLOR_SELVA},
+            "praderas": {"texture": self.terrain_textures.get("fondo"), "color": (144, 238, 144)},
+            "selvas": {"texture": self.terrain_textures.get("fondo"), "color": COLOR_SELVA},
             "santuarios": {"texture": self.terrain_textures.get("santuario"), "color": (218, 165, 32)},
             "montanas": {"texture": self.terrain_textures.get("montana"), "color": (139, 137, 137)}
         }.items():
@@ -525,9 +523,10 @@ class SimulationController:
 
     def _avanzar_dia(self):
         for _ in range(24):
-            self.ecosistema.simular_hora()
-            if self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales:
-                return True
+            sim_over = self.ecosistema.simular_hora()
+            # Si la simulación termina a mitad del día, salimos del bucle
+            if sim_over or self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales:
+                return True # Indicamos que la simulación ha terminado
         
         self._actualizar_grafico()
         self.view.update_hierba_surface(self.ecosistema)
@@ -582,7 +581,11 @@ class SimulationController:
 
     def _action_save(self): self.ecosistema.guardar_estado()
     def _action_load(self):
-        try: self.ecosistema.cargar_estado(); self.view.graph.history = []; self.view.update_hierba_surface(self.ecosistema); self.view.needs_static_redraw = True
+        try: 
+            self.ecosistema.cargar_estado()
+            self.view.graph.history.clear() # Limpiar el historial del gráfico
+            self.view.update_hierba_surface(self.ecosistema)
+            self.view.needs_static_redraw = True
         except FileNotFoundError: print("¡No se encontró guardado!")
 
     def _action_restart(self):

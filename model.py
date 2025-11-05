@@ -248,9 +248,7 @@ class Ecosistema:
                 Pradera((20, 560, 180, 120)),
                 Pradera((650, 550, 130, 130))  
             ],
-            "rios": [
-                Rio([(0, 0), (SIM_WIDTH, SCREEN_HEIGHT)], 60), # Río diagonal de esquina a esquina
-            ],
+            "rios": [],
             "selvas": [
                 Selva((200, 450, 250, 180)),
                 Selva((20, 20, 100, 100)),
@@ -285,6 +283,22 @@ class Ecosistema:
         self.grid_height = SCREEN_HEIGHT // CELL_SIZE
         self.grid_hierba = [[0 for _ in range(self.grid_height)] for _ in range(self.grid_width)]
         self.is_river = [[False for _ in range(self.grid_height)] for _ in range(self.grid_width)]
+        
+        center_x = SIM_WIDTH // 2
+        center_y = SCREEN_HEIGHT // 2
+        thickness = 60
+        
+        # Puntos para los brazos del río
+        p_centro = (center_x, center_y)
+        p_izquierda = (0, center_y)
+        p_derecha = (SIM_WIDTH, center_y)
+        p_arriba = (center_x, 0)
+        p_abajo_izquierda = (0, SCREEN_HEIGHT)
+        
+        # Crear los ríos como líneas con un grosor
+        self.terreno["rios"].append(Rio([p_izquierda, p_centro, p_derecha], thickness)) # Río horizontal
+        self.terreno["rios"].append(Rio([p_arriba, p_centro], thickness)) # Brazo superior
+        self.terreno["rios"].append(Rio([p_abajo_izquierda, p_izquierda], thickness)) # Brazo inferior izquierdo
 
         for gx in range(self.grid_width):
             for gy in range(self.grid_height):
