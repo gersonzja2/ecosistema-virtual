@@ -32,34 +32,86 @@ class Pez:
         self.direccion = random.uniform(0, 2 * math.pi)
 
 class Rio(Terreno):
-    def __init__(self, rect):
-        super().__init__(rect)
+    def __init__(self, points, width):
+        self.points = points
+        self.width = width
+        self.polygon = self._create_polygon_from_line()
+        if self.polygon:
+            min_x = min(p[0] for p in self.polygon)
+            max_x = max(p[0] for p in self.polygon)
+            min_y = min(p[1] for p in self.polygon)
+            max_y = max(p[1] for p in self.polygon)
+            bounding_rect = pygame.Rect(min_x, min_y, max_x - min_x, max_y - min_y)
+        else:
+            bounding_rect = pygame.Rect(0, 0, 0, 0)
+        super().__init__(bounding_rect)
         self.max_peces = 20
         self.peces = []
         self._generar_peces_iniciales()
 
+    def _create_polygon_from_line(self):
+        path = []
+        for i in range(len(self.points) - 1):
+            p1 = pygame.Vector2(self.points[i])
+            p2 = pygame.Vector2(self.points[i+1])
+            direction_vec = p2 - p1
+            if direction_vec.length() == 0: continue # Evita la normalización de un vector cero
+            direction = direction_vec.normalize()
+            perp = pygame.Vector2(-direction.y, direction.x) * self.width / 2
+            path.append(p1 + perp)
+            path.append(p2 + perp)
+        
+        for i in range(len(self.points) - 1, 0, -1):
+            p1 = pygame.Vector2(self.points[i])
+            p2 = pygame.Vector2(self.points[i-1])
+            direction_vec = p2 - p1
+            if direction_vec.length() == 0: continue # Evita la normalización de un vector cero
+            direction = direction_vec.normalize()
+            perp = pygame.Vector2(direction.y, -direction.x) * self.width / 2
+            path.append(p1 - perp)
+        
+        return path
+
     def _generar_peces_iniciales(self):
         for _ in range(10):
-            x = random.randint(self.rect.left + 5, self.rect.right - 5)
-            y = random.randint(self.rect.top + 5, self.rect.bottom - 5)
-            pez = Pez(x, y, self)
-            self.peces.append(pez)
+            self.agregar_pez()
 
     def crecer_recursos(self, factor_crecimiento):
         if len(self.peces) < 50:
             if random.random() < 0.1 * factor_crecimiento:
-                x = random.randint(self.rect.left + 5, self.rect.right - 5)
-                y = random.randint(self.rect.top + 5, self.rect.bottom - 5)
-                self.peces.append(Pez(x, y, self))
+                self.agregar_pez()
 
     def actualizar(self):
         self.peces = [pez for pez in self.peces if not pez.fue_comido]
         
         if len(self.peces) < self.max_peces and random.random() < 0.1:
-            x = random.randint(self.rect.left + 5, self.rect.right - 5)
-            y = random.randint(self.rect.top + 5, self.rect.bottom - 5)
-            self.peces.append(Pez(x, y, self))
+            self.agregar_pez()
 
+    def agregar_pez(self):
+        for _ in range(100): # Intentar 100 veces encontrar un punto dentro del polígono
+            x = random.randint(self.rect.left, self.rect.right)
+            y = random.randint(self.rect.top, self.rect.bottom)
+            if self.collidepoint(x, y):
+                self.peces.append(Pez(x, y, self))
+                return
+
+    def collidepoint(self, x, y):
+        # Ray-casting algorithm para comprobar si un punto está en un polígono
+        # Corregido para ser más robusto.
+        n = len(self.polygon)
+        inside = False
+        p1x, p1y = self.polygon[0]
+        for i in range(n + 1):
+            p2x, p2y = self.polygon[i % n]
+            if p1y == p2y: # Ignorar segmentos horizontales
+                p1x, p1y = p2x, p2y
+                continue
+            if min(p1y, p2y) < y <= max(p1y, p2y):
+                x_intersection = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                if x_intersection > x:
+                    inside = not inside
+            p1x, p1y = p2x, p2y
+        return inside
 class Selva(Terreno):
     def __init__(self, rect):
         super().__init__(rect)
@@ -197,12 +249,7 @@ class Ecosistema:
                 Pradera((650, 550, 130, 130))  
             ],
             "rios": [
-                Rio((150, 0, 40, 300)),
-                Rio((150, 150, 100, 40)),
-                Rio((450, 0, 40, 250)),
-                Rio((450, 210, 200, 40)),
-                Rio((610, 210, 40, 490)),     # Río principal vertical
-                Rio((0, 400, 610, 40))       # Afluente oeste
+                Rio([(0, 0), (SIM_WIDTH, SCREEN_HEIGHT)], 60), # Río diagonal de esquina a esquina
             ],
             "selvas": [
                 Selva((200, 450, 250, 180)),
@@ -243,7 +290,7 @@ class Ecosistema:
             for gy in range(self.grid_height):
                 cell_rect = pygame.Rect(gx * CELL_SIZE, gy * CELL_SIZE, CELL_SIZE, CELL_SIZE)
                 
-                if any(rio.rect.colliderect(cell_rect) for rio in self.terreno["rios"]):
+                if any(rio.collidepoint(cell_rect.centerx, cell_rect.centery) for rio in self.terreno["rios"]):
                     self.grid_hierba[gx][gy] = 0
                     self.is_river[gx][gy] = True
                     continue
@@ -275,7 +322,7 @@ class Ecosistema:
             self.recursos["carcasas"].append(nueva_carcasa)
     
     def _es_posicion_valida_para_vegetacion(self, x, y, decoraciones_existentes, min_dist):
-        if any(rio.rect.collidepoint(x, y) for rio in self.terreno["rios"]):
+        if any(rio.collidepoint(x, y) for rio in self.terreno["rios"]):
             return False
         return self._es_posicion_decoracion_valida(x, y, decoraciones_existentes, min_dist)
 
@@ -438,7 +485,7 @@ class Ecosistema:
             x = random.randint(zona_elegida.left, zona_elegida.right)
             y = random.randint(zona_elegida.top, zona_elegida.bottom)
             # Asegurarse de no generar dentro de un árbol o un río
-            if not self.choca_con_terreno(x, y) and not any(rio.rect.collidepoint(x, y) for rio in self.terreno["rios"]):
+            if not self.choca_con_terreno(x, y) and not any(rio.collidepoint(x, y) for rio in self.terreno["rios"]):
                 posicion_valida = True
                 break
             intentos += 1
@@ -452,7 +499,7 @@ class Ecosistema:
             "dia_total": self.dia_total,
             "grid_hierba": self.grid_hierba,
             "selvas": [{"rect": list(s.rect), "bayas": s.bayas} for s in self.terreno["selvas"]],
-            "rios": [{"rect": list(r.rect), "num_peces": len(r.peces)} for r in self.terreno["rios"]],
+            "rios": [{"points": r.points, "width": r.width, "num_peces": len(r.peces)} for r in self.terreno["rios"]],
             "animales": [
                 {
                     "tipo": a.__class__.__name__,
@@ -478,9 +525,7 @@ class Ecosistema:
             rio = self.terreno["rios"][i]
             rio.peces = []
             for _ in range(r_data.get("num_peces", 20)):
-                x = random.randint(rio.rect.left + 5, rio.rect.right - 5)
-                y = random.randint(rio.rect.top + 5, rio.rect.bottom - 5)
-                rio.peces.append(Pez(x, y, rio))
+                rio.agregar_pez()
 
         self.animales = []
         tipos = {"Herbivoro": Herbivoro, "Carnivoro": Carnivoro, "Omnivoro": Omnivoro, "Conejo": Conejo, "Raton": Raton, "Cabra": Cabra, "Leopardo": Leopardo, "Gato": Gato, "Cerdo": Cerdo, "Mono": Mono, "Halcon": Halcon, "Insecto": Insecto}

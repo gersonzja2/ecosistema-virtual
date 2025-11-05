@@ -19,6 +19,7 @@ COLOR_SELVA = (39, 174, 96)
 COLOR_BUTTON = (26, 188, 156)
 COLOR_PEZ = (0, 191, 255)
 COLOR_CARCASA = (128, 128, 128)
+
 class PopulationGraph:
     def __init__(self, x, y, width, height, font):
         self.rect = pygame.Rect(x, y, width, height)
@@ -344,9 +345,10 @@ class PygameView:
         self._update_water_animation()
         for rio in ecosistema.terreno["rios"]:
             if self.agua_texturas:
-                self._draw_tiled_texture(self.screen, self.agua_texturas[self.agua_frame_actual], rio.rect)
+                pygame.draw.polygon(self.screen, COLOR_RIO, rio.polygon) # Dibuja un color base primero
+                # Podríamos mejorar esto para texturizar polígonos, pero es más complejo. Por ahora, color sólido.
             else:
-                pygame.draw.rect(self.screen, COLOR_RIO, rio.rect)
+                pygame.draw.polygon(self.screen, COLOR_RIO, rio.polygon)
 
     def update_hierba_surface(self, ecosistema):
         self.hierba_surface.fill((0, 0, 0, 0))
