@@ -6,7 +6,6 @@ SCREEN_WIDTH = 1200
 SCREEN_HEIGHT = 700
 SIM_WIDTH = 800
 UI_WIDTH = 400
-
 COLOR_BACKGROUND = (22, 160, 133)
 COLOR_SIM_AREA = (46, 204, 113)
 COLOR_HERBIVORO = (255, 255, 255)
@@ -543,9 +542,6 @@ class SimulationController:
                 sim_over = self._avanzar_hora()
                 self.last_update_time = current_time
                 
-                if self.animal_seleccionado and not self.animal_seleccionado.esta_vivo:
-                    self.animal_seleccionado = None
-
             running, sim_over = self.handle_events(running, sim_over)
 
             self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.sim_speed_multiplier)
