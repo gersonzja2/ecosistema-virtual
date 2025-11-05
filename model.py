@@ -10,7 +10,6 @@ CELL_SIZE = 20
 MAX_HIERBA_NORMAL = 70
 BORDE_MARGEN = 20 # Margen de seguridad para que los animales no se acerquen a los bordes
 MAX_HIERBA_PRADERA = 120
-
 class Terreno:
     def __init__(self, rect):
         self.rect = pygame.Rect(rect)
@@ -241,16 +240,8 @@ class Ecosistema:
 
         self.dia_total = 1
         self.hora_actual = 0
-        self.dias_por_estacion = 20
-        self.estacion_actual = "Primavera"
-        self.estaciones = {
-            "Primavera": {"crecimiento": 2.0, "coste_energia": 0.1}, # Crecimiento moderado
-            "Verano":    {"crecimiento": 1.5, "coste_energia": 0.4}, # Menos crecimiento, más coste
-            "Otoño":     {"crecimiento": 0.5, "coste_energia": 0.7}, # Poco crecimiento, alto coste
-            "Invierno":  {"crecimiento": 0.1, "coste_energia": 1.5}  # Invierno muy duro
-        }
         self.clima_actual = "Normal"
-
+        self.factor_crecimiento_base = 1.5 # Factor de crecimiento constante
         self.animales_nuevos = []
         self.hierba_cambio = False # Flag para optimización de renderizado
 
@@ -334,10 +325,6 @@ class Ecosistema:
                         menor_dist_selva_sq, mejor_selva = dist_sq, selva
                 if mejor_selva: self.terrain_cache["selva"][(gx, gy)] = (mejor_selva, menor_dist_selva_sq)
 
-    def _actualizar_estacion(self):
-        indice_estacion = (self.dia_total // self.dias_por_estacion) % 4
-        self.estacion_actual = list(self.estaciones.keys())[indice_estacion]
-
     def _actualizar_clima(self):
         if random.random() < 0.05:
             self.clima_actual = "Sequía"
@@ -374,10 +361,9 @@ class Ecosistema:
         if self.hora_actual >= 24:
             self.hora_actual = 0
             self.dia_total += 1
-            self._actualizar_estacion()
             self._actualizar_clima()
 
-            factor_crecimiento = self.estaciones[self.estacion_actual]['crecimiento']
+            factor_crecimiento = self.factor_crecimiento_base
             if self.clima_actual == "Sequía":
                 factor_crecimiento *= 0.1
 

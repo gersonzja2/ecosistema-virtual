@@ -1,7 +1,7 @@
 import pygame
 import random
 from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, Halcon, Insecto, CELL_SIZE, MAX_HIERBA_PRADERA, Rio, Pez
-##
+
 SCREEN_WIDTH = 1200
 SCREEN_HEIGHT = 700
 SIM_WIDTH = 800
@@ -18,7 +18,6 @@ COLOR_SELVA = (39, 174, 96)
 COLOR_BUTTON = (26, 188, 156)
 COLOR_PEZ = (0, 191, 255)
 COLOR_CARCASA = (128, 128, 128)
-
 class PopulationGraph:
     def __init__(self, x, y, width, height, font):
         self.rect = pygame.Rect(x, y, width, height)
@@ -280,9 +279,7 @@ class PygameView:
         hora_str = str(ecosistema.hora_actual).zfill(2)
         self._draw_text(f"DÍA: {ecosistema.dia_total} - {hora_str}:00", self.font_header, COLOR_TEXT, self.screen, ui_x, 5)
 
-        y_offset = 35
-        self._draw_text(f"Estación: {ecosistema.estacion_actual}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
-        y_offset += 20
+        y_offset = 40
         self._draw_text(f"Clima: {ecosistema.clima_actual}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
         
         y_offset = 80
