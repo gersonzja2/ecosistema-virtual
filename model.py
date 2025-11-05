@@ -235,12 +235,8 @@ class Ecosistema:
         # Brazo superior vertical: desde el borde superior hasta la parte superior del pool
         top_arm = Rio((center_x - thickness // 2, 0, thickness, center_y - thickness // 2))
 
-        # Brazo inferior-izquierdo: corriente que surge desde la esquina inferior izquierda
-        # (vertical hacia arriba hasta tocar la franja horizontal izquierda)
-        bottom_left_vertical = Rio((0, center_y + thickness // 2, thickness, SCREEN_HEIGHT - (center_y + thickness // 2)))
-
-        # Añadir a la lista de ríos; el orden puede cambiar, pero todos confluyen visualmente en el pool
-        self.terreno["rios"].extend([left_arm, right_arm, top_arm, bottom_left_vertical, pool])
+        # Añadir a la lista de ríos
+        self.terreno["rios"].extend([left_arm, right_arm, top_arm, pool])
 
         for gx in range(self.grid_width):
             for gy in range(self.grid_height):
@@ -416,17 +412,32 @@ class Ecosistema:
 
         self.animales.extend(self.animales_nuevos)
         
+    def _obtener_posicion_inicial(self, tipo_animal):
+        """Determina la posición inicial para un nuevo animal basado en su tipo."""
+        intentos = 0
+        while intentos < 100:
+            if issubclass(tipo_animal, Carnivoro):
+                # Esquina superior izquierda
+                x = random.randint(20, 150)
+                y = random.randint(20, 150)
+            elif issubclass(tipo_animal, Herbivoro):
+                # Parte inferior del mapa
+                x = random.randint(20, SIM_WIDTH - 20)
+                y = random.randint(SCREEN_HEIGHT - 150, SCREEN_HEIGHT - 20)
+            elif issubclass(tipo_animal, Omnivoro):
+                # Esquina superior derecha
+                x = random.randint(SIM_WIDTH - 150, SIM_WIDTH - 20)
+                y = random.randint(20, 150)
+            
+            if not self.choca_con_terreno(x, y) and not any(rio.rect.collidepoint(x, y) for rio in self.terreno["rios"]):
+                return x, y
+            intentos += 1
+        return random.randint(20, SIM_WIDTH - 20), random.randint(20, SCREEN_HEIGHT - 20) # Fallback
 
     def agregar_animal(self, tipo_animal, nombre=None, es_rescate=False):
         if nombre is None:
             nombre = f"{tipo_animal.__name__} {getattr(tipo_animal, 'contador', 0) + 1}"
-
-        intentos = 0
-        while intentos < 100:
-            x = random.randint(20, SIM_WIDTH - 20)
-            y = random.randint(20, SCREEN_HEIGHT - 20)
-            if not self.choca_con_terreno(x, y): break
-            intentos += 1
+        x, y = self._obtener_posicion_inicial(tipo_animal)
         nuevo_animal = tipo_animal(nombre, x, y)
         self.animales.append(nuevo_animal)
 
@@ -476,5 +487,3 @@ class Ecosistema:
                                     max_energia=a_data.get("max_energia", max_energia_default))
                 animal._sed = a_data.get("sed", 0)
                 self.animales.append(animal)
-        
-        self._precalcular_terrenos_cercanos()
