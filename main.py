@@ -495,9 +495,9 @@ class SimulationController:
             self.ecosistema.hierba_cambio = False
         if self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales:
             return True
-        return False
         if self.ecosistema.hora_actual == 0:
             self._actualizar_grafico()
+        return False
 
     def _setup_button_actions(self):
         animal_map = {

@@ -113,7 +113,7 @@ class Animal(ABC):
 
     @property
     def esta_vivo(self):
-        return True
+        return self._energia > 0
 
     def __str__(self):
         estado = "Vivo" if self.esta_vivo else "Muerto"
@@ -397,7 +397,7 @@ class Ecosistema:
                     if pradera_actual:
                         max_capacidad = pradera_actual.max_hierba
                         tasa_crecimiento_base = pradera_actual.tasa_crecimiento
-                    crecimiento_real = int(tasa_crecimiento_base * factor_crecimiento * (self.grid_hierba[gx][gy] / max_capacidad))
+                    crecimiento_real = int(tasa_crecimiento_base * factor_crecimiento * (1 - self.grid_hierba[gx][gy] / max_capacidad))
                     self.grid_hierba[gx][gy] += crecimiento_real
                     self.grid_hierba[gx][gy] = min(self.grid_hierba[gx][gy], max_capacidad)
             self.hierba_cambio = True # La hierba creció, necesita redibujarse
@@ -412,7 +412,6 @@ class Ecosistema:
 
         self.animales.extend(self.animales_nuevos)
         
-        if self.hora_actual == 0: self._rescate_extincion()
 
     def agregar_animal(self, tipo_animal, nombre=None, es_rescate=False):
         if nombre is None:
@@ -454,8 +453,6 @@ class Ecosistema:
         for i, s_data in enumerate(estado["selvas"]):
             self.terreno["selvas"][i].bayas = s_data["bayas"]
         
-        self._precalcular_terrenos_cercanos()
-
         for i, r_data in enumerate(estado.get("rios", [])):
             rio = self.terreno["rios"][i]
             rio.peces = []
@@ -475,3 +472,5 @@ class Ecosistema:
                                     max_energia=a_data.get("max_energia", max_energia_default))
                 animal._sed = a_data.get("sed", 0)
                 self.animales.append(animal)
+        
+        self._precalcular_terrenos_cercanos()
