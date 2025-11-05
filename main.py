@@ -1,12 +1,11 @@
 import pygame
 import random
 from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, Halcon, Insecto, CELL_SIZE, MAX_HIERBA_PRADERA, Rio, Pez
-#
+
 SCREEN_WIDTH = 1200
 SCREEN_HEIGHT = 700
 SIM_WIDTH = 800
 UI_WIDTH = 400
-
 COLOR_BACKGROUND = (22, 160, 133)
 COLOR_SIM_AREA = (46, 204, 113)
 COLOR_HERBIVORO = (255, 255, 255)
@@ -19,7 +18,6 @@ COLOR_SELVA = (39, 174, 96)
 COLOR_BUTTON = (26, 188, 156)
 COLOR_PEZ = (0, 191, 255)
 COLOR_CARCASA = (128, 128, 128)
-
 class PopulationGraph:
     def __init__(self, x, y, width, height, font):
         self.rect = pygame.Rect(x, y, width, height)
@@ -281,9 +279,7 @@ class PygameView:
         hora_str = str(ecosistema.hora_actual).zfill(2)
         self._draw_text(f"DÍA: {ecosistema.dia_total} - {hora_str}:00", self.font_header, COLOR_TEXT, self.screen, ui_x, 5)
 
-        y_offset = 35
-        self._draw_text(f"Estación: {ecosistema.estacion_actual}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
-        y_offset += 20
+        y_offset = 40
         self._draw_text(f"Clima: {ecosistema.clima_actual}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
         
         y_offset = 80
@@ -496,9 +492,9 @@ class SimulationController:
             self.ecosistema.hierba_cambio = False
         if self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales:
             return True
-        return False
         if self.ecosistema.hora_actual == 0:
             self._actualizar_grafico()
+        return False
 
     def _setup_button_actions(self):
         animal_map = {
@@ -557,9 +553,6 @@ class SimulationController:
                 sim_over = self._avanzar_hora()
                 self.last_update_time = current_time
                 
-                if self.animal_seleccionado and not self.animal_seleccionado.esta_vivo:
-                    self.animal_seleccionado = None
-
             running, sim_over = self.handle_events(running, sim_over)
 
             self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.sim_speed_multiplier)
