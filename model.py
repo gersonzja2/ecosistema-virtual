@@ -32,86 +32,34 @@ class Pez:
         self.direccion = random.uniform(0, 2 * math.pi)
 
 class Rio(Terreno):
-    def __init__(self, points, width):
-        self.points = points
-        self.width = width
-        self.polygon = self._create_polygon_from_line()
-        if self.polygon:
-            min_x = min(p[0] for p in self.polygon)
-            max_x = max(p[0] for p in self.polygon)
-            min_y = min(p[1] for p in self.polygon)
-            max_y = max(p[1] for p in self.polygon)
-            bounding_rect = pygame.Rect(min_x, min_y, max_x - min_x, max_y - min_y)
-        else:
-            bounding_rect = pygame.Rect(0, 0, 0, 0)
-        super().__init__(bounding_rect)
+    def __init__(self, rect):
+        super().__init__(rect)
         self.max_peces = 20
         self.peces = []
         self._generar_peces_iniciales()
 
-    def _create_polygon_from_line(self):
-        path = []
-        for i in range(len(self.points) - 1):
-            p1 = pygame.Vector2(self.points[i])
-            p2 = pygame.Vector2(self.points[i+1])
-            direction_vec = p2 - p1
-            if direction_vec.length() == 0: continue # Evita la normalización de un vector cero
-            direction = direction_vec.normalize()
-            perp = pygame.Vector2(-direction.y, direction.x) * self.width / 2
-            path.append(p1 + perp)
-            path.append(p2 + perp)
-        
-        for i in range(len(self.points) - 1, 0, -1):
-            p1 = pygame.Vector2(self.points[i])
-            p2 = pygame.Vector2(self.points[i-1])
-            direction_vec = p2 - p1
-            if direction_vec.length() == 0: continue # Evita la normalización de un vector cero
-            direction = direction_vec.normalize()
-            perp = pygame.Vector2(direction.y, -direction.x) * self.width / 2
-            path.append(p1 - perp)
-        
-        return path
-
     def _generar_peces_iniciales(self):
         for _ in range(10):
-            self.agregar_pez()
+            x = random.randint(self.rect.left + 5, self.rect.right - 5)
+            y = random.randint(self.rect.top + 5, self.rect.bottom - 5)
+            pez = Pez(x, y, self)
+            self.peces.append(pez)
 
     def crecer_recursos(self, factor_crecimiento):
         if len(self.peces) < 50:
             if random.random() < 0.1 * factor_crecimiento:
-                self.agregar_pez()
+                x = random.randint(self.rect.left + 5, self.rect.right - 5)
+                y = random.randint(self.rect.top + 5, self.rect.bottom - 5)
+                self.peces.append(Pez(x, y, self))
 
     def actualizar(self):
         self.peces = [pez for pez in self.peces if not pez.fue_comido]
         
         if len(self.peces) < self.max_peces and random.random() < 0.1:
-            self.agregar_pez()
+            x = random.randint(self.rect.left + 5, self.rect.right - 5)
+            y = random.randint(self.rect.top + 5, self.rect.bottom - 5)
+            self.peces.append(Pez(x, y, self))
 
-    def agregar_pez(self):
-        for _ in range(100): # Intentar 100 veces encontrar un punto dentro del polígono
-            x = random.randint(self.rect.left, self.rect.right)
-            y = random.randint(self.rect.top, self.rect.bottom)
-            if self.collidepoint(x, y):
-                self.peces.append(Pez(x, y, self))
-                return
-
-    def collidepoint(self, x, y):
-        # Ray-casting algorithm para comprobar si un punto está en un polígono
-        # Corregido para ser más robusto.
-        n = len(self.polygon)
-        inside = False
-        p1x, p1y = self.polygon[0]
-        for i in range(n + 1):
-            p2x, p2y = self.polygon[i % n]
-            if p1y == p2y: # Ignorar segmentos horizontales
-                p1x, p1y = p2x, p2y
-                continue
-            if min(p1y, p2y) < y <= max(p1y, p2y):
-                x_intersection = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
-                if x_intersection > x:
-                    inside = not inside
-            p1x, p1y = p2x, p2y
-        return inside
 class Selva(Terreno):
     def __init__(self, rect):
         super().__init__(rect)
@@ -139,7 +87,6 @@ class Animal(ABC):
             max_energia = max(80, min(120, 100 + random.randint(-10, 10)))
         self.max_energia = max_energia
         self._energia = max(0, min(energia, self.max_energia))
-        self.estado = "deambulando"
         
         type(self).contador = getattr(type(self), 'contador', 0) + 1
 
@@ -262,20 +209,6 @@ class Ecosistema:
             "arboles": [],
             "plantas": [],
         }
-        self.zonas_habitat = {
-            Conejo: [pygame.Rect(20, 400, 150, 150), pygame.Rect(300, 50, 250, 100)],
-            Raton: [pygame.Rect(50, 50, 100, 150), pygame.Rect(250, 200, 200, 50)],
-            Cabra: [pygame.Rect(600, 400, 150, 120), pygame.Rect(20, 560, 180, 120)],
-            Insecto: [pygame.Rect(20, 200, 120, 150), pygame.Rect(20, 20, 100, 100)],
-            
-            Leopardo: [pygame.Rect(500, 250, 150, 100)],
-            Gato: [pygame.Rect(20, 20, 100, 100), pygame.Rect(650, 550, 130, 130)],
-            Halcon: [pygame.Rect(700, 20, 80, 250)],
-
-            Cerdo: [pygame.Rect(200, 450, 250, 180)],
-            Mono: [pygame.Rect(550, 50, 200, 200)]
-        }
-
         self.recursos = {
             "carcasas": []
         }
@@ -283,28 +216,37 @@ class Ecosistema:
         self.grid_height = SCREEN_HEIGHT // CELL_SIZE
         self.grid_hierba = [[0 for _ in range(self.grid_height)] for _ in range(self.grid_width)]
         self.is_river = [[False for _ in range(self.grid_height)] for _ in range(self.grid_width)]
-        
+
+        # Construir ríos nuevos: pool central + brazos hacia esquinas (aproximación con rects)
+        # Parámetros geométricos
         center_x = SIM_WIDTH // 2
         center_y = SCREEN_HEIGHT // 2
         thickness = 60
-        
-        # Puntos para los brazos del río
-        p_centro = (center_x, center_y)
-        p_izquierda = (0, center_y)
-        p_derecha = (SIM_WIDTH, center_y)
-        p_arriba = (center_x, 0)
-        p_abajo_izquierda = (0, SCREEN_HEIGHT)
-        
-        # Crear los ríos como líneas con un grosor
-        self.terreno["rios"].append(Rio([p_izquierda, p_centro, p_derecha], thickness)) # Río horizontal
-        self.terreno["rios"].append(Rio([p_arriba, p_centro], thickness)) # Brazo superior
-        self.terreno["rios"].append(Rio([p_abajo_izquierda, p_izquierda], thickness)) # Brazo inferior izquierdo
+
+        # Área central donde confluyen los ríos
+        pool = Rio((center_x - thickness // 2, center_y - thickness // 2, thickness, thickness))
+
+        # Brazo izquierdo horizontal: desde el borde izquierdo hasta la izquierda del pool
+        left_arm = Rio((0, center_y - thickness // 2, center_x - thickness // 2, thickness))
+
+        # Brazo derecho horizontal: desde la derecha del pool hasta el borde derecho
+        right_arm = Rio((center_x + thickness // 2, center_y - thickness // 2, SIM_WIDTH - (center_x + thickness // 2), thickness))
+
+        # Brazo superior vertical: desde el borde superior hasta la parte superior del pool
+        top_arm = Rio((center_x - thickness // 2, 0, thickness, center_y - thickness // 2))
+
+        # Brazo inferior-izquierdo: corriente que surge desde la esquina inferior izquierda
+        # (vertical hacia arriba hasta tocar la franja horizontal izquierda)
+        bottom_left_vertical = Rio((0, center_y + thickness // 2, thickness, SCREEN_HEIGHT - (center_y + thickness // 2)))
+
+        # Añadir a la lista de ríos; el orden puede cambiar, pero todos confluyen visualmente en el pool
+        self.terreno["rios"].extend([left_arm, right_arm, top_arm, bottom_left_vertical, pool])
 
         for gx in range(self.grid_width):
             for gy in range(self.grid_height):
                 cell_rect = pygame.Rect(gx * CELL_SIZE, gy * CELL_SIZE, CELL_SIZE, CELL_SIZE)
                 
-                if any(rio.collidepoint(cell_rect.centerx, cell_rect.centery) for rio in self.terreno["rios"]):
+                if any(rio.rect.colliderect(cell_rect) for rio in self.terreno["rios"]):
                     self.grid_hierba[gx][gy] = 0
                     self.is_river[gx][gy] = True
                     continue
@@ -336,7 +278,7 @@ class Ecosistema:
             self.recursos["carcasas"].append(nueva_carcasa)
     
     def _es_posicion_valida_para_vegetacion(self, x, y, decoraciones_existentes, min_dist):
-        if any(rio.collidepoint(x, y) for rio in self.terreno["rios"]):
+        if any(rio.rect.collidepoint(x, y) for rio in self.terreno["rios"]):
             return False
         return self._es_posicion_decoracion_valida(x, y, decoraciones_existentes, min_dist)
 
@@ -351,38 +293,33 @@ class Ecosistema:
         self.terreno["arboles"].clear()
         self.terreno["plantas"].clear()
         
-        decoraciones_todas = [] # Lista de (x, y) de todas las decoraciones
-        intentos_max_por_item = 50
-        margen = 15 # Margen desde los bordes de la zona
+        decoraciones_todas = []
+        intentos_max = 80
+        margen = 5
 
-        # Generar árboles en las selvas
         for selva in self.terreno["selvas"]:
-            num_arboles = int(selva.rect.width * selva.rect.height / 4000) # Densidad de árboles
-            for _ in range(num_arboles):
-                for _ in range(intentos_max_por_item):
+            for _ in range(35):
+                for _ in range(intentos_max):
                     x = random.randint(selva.rect.left + margen, selva.rect.right - margen)
                     y = random.randint(selva.rect.top + margen, selva.rect.bottom - margen)
-                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=25):
+                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=35):
                         self.terreno["arboles"].append((x, y)); decoraciones_todas.append((x, y))
                         break
 
-        # Generar plantas en praderas y selvas
         zonas_alimento = self.terreno["praderas"] + self.terreno["selvas"]
         for zona in zonas_alimento:
-            num_plantas = int(zona.rect.width * zona.rect.height / 2500) # Densidad de plantas
-            for _ in range(num_plantas):
-                for _ in range(intentos_max_por_item):
+            for _ in range(35):
+                for _ in range(intentos_max):
                     x = random.randint(zona.rect.left + margen, zona.rect.right - margen)
                     y = random.randint(zona.rect.top + margen, zona.rect.bottom - margen)
-                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=15):
+                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=20):
                         self.terreno["plantas"].append((x, y)); decoraciones_todas.append((x, y))
                         break
 
-        # Generar algunas plantas aleatorias por todo el mapa
-        for _ in range(80): # Número reducido para no saturar
-            for _ in range(intentos_max_por_item):
-                x, y = random.randint(margen, SIM_WIDTH - margen), random.randint(margen, SCREEN_HEIGHT - margen)
-                if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=15):
+        for _ in range(120):
+            for _ in range(intentos_max):
+                x, y = random.randint(0, SIM_WIDTH), random.randint(0, SCREEN_HEIGHT)
+                if not self.choca_con_terreno(x,y) and self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=20):
                     self.terreno["plantas"].append((x, y)); decoraciones_todas.append((x, y))
                     break
 
@@ -484,36 +421,21 @@ class Ecosistema:
         if nombre is None:
             nombre = f"{tipo_animal.__name__} {getattr(tipo_animal, 'contador', 0) + 1}"
 
-        zona_habitat_disponible = self.zonas_habitat.get(tipo_animal)
-        if not zona_habitat_disponible:
-            # Fallback para animales sin zona definida (aunque todos deberían tener)
-            zona_fallback = pygame.Rect(0, 0, SIM_WIDTH, SCREEN_HEIGHT)
-            zona_elegida = zona_fallback
-        else:
-            zona_elegida = random.choice(zona_habitat_disponible)
-
         intentos = 0
-        posicion_valida = False
-        x, y = 0, 0
         while intentos < 100:
-            x = random.randint(zona_elegida.left, zona_elegida.right)
-            y = random.randint(zona_elegida.top, zona_elegida.bottom)
-            # Asegurarse de no generar dentro de un árbol o un río
-            if not self.choca_con_terreno(x, y) and not any(rio.collidepoint(x, y) for rio in self.terreno["rios"]):
-                posicion_valida = True
-                break
+            x = random.randint(20, SIM_WIDTH - 20)
+            y = random.randint(20, SCREEN_HEIGHT - 20)
+            if not self.choca_con_terreno(x, y): break
             intentos += 1
-        
-        if posicion_valida:
-            nuevo_animal = tipo_animal(nombre, x, y)
-            self.animales.append(nuevo_animal)
+        nuevo_animal = tipo_animal(nombre, x, y)
+        self.animales.append(nuevo_animal)
 
     def guardar_estado(self, archivo="save_state.json"):
         estado = {
             "dia_total": self.dia_total,
             "grid_hierba": self.grid_hierba,
             "selvas": [{"rect": list(s.rect), "bayas": s.bayas} for s in self.terreno["selvas"]],
-            "rios": [{"points": r.points, "width": r.width, "num_peces": len(r.peces)} for r in self.terreno["rios"]],
+            "rios": [{"rect": list(r.rect), "num_peces": len(r.peces)} for r in self.terreno["rios"]],
             "animales": [
                 {
                     "tipo": a.__class__.__name__,
@@ -539,7 +461,9 @@ class Ecosistema:
             rio = self.terreno["rios"][i]
             rio.peces = []
             for _ in range(r_data.get("num_peces", 20)):
-                rio.agregar_pez()
+                x = random.randint(rio.rect.left + 5, rio.rect.right - 5)
+                y = random.randint(rio.rect.top + 5, rio.rect.bottom - 5)
+                rio.peces.append(Pez(x, y, rio))
 
         self.animales = []
         tipos = {"Herbivoro": Herbivoro, "Carnivoro": Carnivoro, "Omnivoro": Omnivoro, "Conejo": Conejo, "Raton": Raton, "Cabra": Cabra, "Leopardo": Leopardo, "Gato": Gato, "Cerdo": Cerdo, "Mono": Mono, "Halcon": Halcon, "Insecto": Insecto}
@@ -548,8 +472,7 @@ class Ecosistema:
             if tipo_clase:
                 max_energia_default = max(80, min(120, 100 + random.randint(-10, 10)))
                 animal = tipo_clase(a_data["nombre"], a_data["x"], a_data["y"], 
-                                    a_data.get("edad", 0), 
-                                    min(a_data.get("energia", 100), a_data.get("max_energia", max_energia_default)), 
+                                    a_data.get("edad", 0), a_data.get("energia", 100), 
                                     max_energia=a_data.get("max_energia", max_energia_default))
                 animal._sed = a_data.get("sed", 0)
                 self.animales.append(animal)
