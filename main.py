@@ -156,8 +156,6 @@ class PygameView:
         textures = {}
         texture_files = {
             "fondo": "textura_fondo.png",
-            "selva": "textura_selva.png",
-            "pradera": "textura_pradera.png",
             "montana": "textura_montana.png",
             "santuario": "textura_santuario.png"
         }
@@ -341,8 +339,8 @@ class PygameView:
             self._draw_tiled_texture(self.background_surface, self.terrain_textures["fondo"], self.background_surface.get_rect())
 
         for tipo_terreno, datos in {
-            "praderas": {"texture": self.terrain_textures.get("pradera"), "color": (144, 238, 144)},
-            "selvas": {"texture": self.terrain_textures.get("selva"), "color": COLOR_SELVA},
+            "praderas": {"texture": self.terrain_textures.get("fondo"), "color": (144, 238, 144)},
+            "selvas": {"texture": self.terrain_textures.get("fondo"), "color": COLOR_SELVA},
             "santuarios": {"texture": self.terrain_textures.get("santuario"), "color": (218, 165, 32)},
             "montanas": {"texture": self.terrain_textures.get("montana"), "color": (139, 137, 137)}
         }.items():
