@@ -31,6 +31,22 @@ class Pez:
         self.velocidad = 1
         self.direccion = random.uniform(0, 2 * math.pi)
 
+    def actualizar(self):
+        """Mueve el pez y lo mantiene dentro de los límites de su río."""
+        if self.fue_comido:
+            return
+
+        # Mover el pez
+        self.x += self.velocidad * math.cos(self.direccion)
+        self.y += self.velocidad * math.sin(self.direccion)
+
+        # Rebotar en los bordes del río
+        if not self.rio.rect.collidepoint(self.x, self.y):
+            self.x = max(self.rio.rect.left, min(self.x, self.rio.rect.right))
+            self.y = max(self.rio.rect.top, min(self.y, self.rio.rect.bottom))
+            # Cambiar de dirección al chocar
+            self.direccion = random.uniform(0, 2 * math.pi)
+
 class Rio(Terreno):
     def __init__(self, rect):
         super().__init__(rect)
@@ -87,6 +103,17 @@ class Animal(ABC):
             max_energia = max(80, min(120, 100 + random.randint(-10, 10)))
         self.max_energia = max_energia
         self._energia = max(0, min(energia, self.max_energia))
+        self.estado = "deambulando"
+        self.velocidad = 1.5 + random.uniform(-0.2, 0.2)
+        self.target_x = None
+        self.target_y = None
+        self.tiempo_deambulando = 0
+        self.ecosistema = None
+
+        self.edad_reproductiva = 5 # Días
+        self.energia_para_reproducir = 60
+        self.probabilidad_reproduccion = 0.5 # 50% de probabilidad por hora si las condiciones se dan
+        self.cooldown_reproduccion = 0
         
         type(self).contador = getattr(type(self), 'contador', 0) + 1
 
@@ -117,6 +144,120 @@ class Animal(ABC):
     def __str__(self):
         estado = "Vivo" if self.esta_vivo else "Muerto"
         return f"Animal: {self._nombre}, Tipo: {self.__class__.__name__}, Edad: {self._edad}, Energía: {self._energia}, Estado: {estado}"
+
+    def _obtener_zona_deambulacion(self):
+        """Devuelve el rectángulo (x, y, w, h) de la zona de deambulación."""
+        center_x = SIM_WIDTH // 2
+        center_y = SCREEN_HEIGHT // 2
+        thickness = 60
+        
+        rio_borde_izq = center_x - thickness // 2
+        rio_borde_der = center_x + thickness // 2
+        rio_borde_sup = center_y - thickness // 2
+
+        if isinstance(self, Carnivoro):
+            # Cuadrante superior izquierdo
+            return (BORDE_MARGEN, BORDE_MARGEN, rio_borde_izq - BORDE_MARGEN * 2, rio_borde_sup - BORDE_MARGEN * 2)
+        elif isinstance(self, Herbivoro):
+            # Cuadrante inferior (todo el ancho)
+            return (BORDE_MARGEN, rio_borde_sup + thickness, SIM_WIDTH - BORDE_MARGEN * 2, SCREEN_HEIGHT - (rio_borde_sup + thickness) - BORDE_MARGEN)
+        elif isinstance(self, Omnivoro):
+            # Cuadrante superior derecho
+            return (rio_borde_der, BORDE_MARGEN, SIM_WIDTH - rio_borde_der - BORDE_MARGEN, rio_borde_sup - BORDE_MARGEN * 2)
+        return (BORDE_MARGEN, BORDE_MARGEN, SIM_WIDTH - 2 * BORDE_MARGEN, SCREEN_HEIGHT - 2 * BORDE_MARGEN)
+
+    def deambular(self):
+        """Comportamiento de movimiento errático dentro de una zona."""
+        if self.target_x is None or self.tiempo_deambulando <= 0:
+            zona_x, zona_y, zona_w, zona_h = self._obtener_zona_deambulacion()
+            self.target_x = random.randint(zona_x, zona_x + zona_w)
+            self.target_y = random.randint(zona_y, zona_y + zona_h)
+            self.tiempo_deambulando = random.randint(50, 150) # Ticks para deambular hacia el objetivo
+
+        dx = self.target_x - self._x_float
+        dy = self.target_y - self._y_float
+        dist = math.sqrt(dx**2 + dy**2)
+
+        if dist < self.velocidad:
+            self._x_float = self.target_x
+            self._y_float = self.target_y
+            self.target_x = None # Forzar nuevo objetivo
+        else:
+            self._x_float += (dx / dist) * self.velocidad
+            self._y_float += (dy / dist) * self.velocidad
+
+        # Asegurarse de que el animal no se salga de los límites de la simulación
+        self._x_float = max(BORDE_MARGEN, min(self._x_float, SIM_WIDTH - BORDE_MARGEN))
+        self._y_float = max(BORDE_MARGEN, min(self._y_float, SCREEN_HEIGHT - BORDE_MARGEN))
+
+        self.tiempo_deambulando -= 1
+
+    def _intentar_reproducir(self, ecosistema):
+        """Busca una pareja cercana y, si es adecuada, intenta reproducirse."""
+        if self.edad < self.edad_reproductiva or self.energia < self.energia_para_reproducir or self.cooldown_reproduccion > 0 or self.estado == "reproduciendose":
+            return
+
+        # Buscar pareja adecuada en todo el ecosistema
+        parejas_potenciales = []
+        for animal in ecosistema.animales:
+            if animal is not self and type(animal) is type(self) and \
+               animal.edad >= animal.edad_reproductiva and \
+               animal.energia >= animal.energia_para_reproducir and \
+               animal.cooldown_reproduccion <= 0:
+                parejas_potenciales.append(animal)
+
+        if not parejas_potenciales:
+            print(f"{self.nombre} no encontró parejas disponibles.")
+            return
+
+        # Encontrar la pareja más cercana de las disponibles
+        pareja_elegida = min(parejas_potenciales, key=lambda p: math.sqrt((self.x - p.x)**2 + (self.y - p.y)**2))
+
+        # Moverse hacia la pareja
+        self.estado = "reproduciendose"
+        self.target_x = pareja_elegida.x
+        self.target_y = pareja_elegida.y
+        print(f"{self.nombre} se dirige a reproducirse con {pareja_elegida.nombre}.")
+
+        # Comprobar si ya está lo suficientemente cerca para reproducirse
+        dist_a_pareja = math.sqrt((self.x - pareja_elegida.x)**2 + (self.y - pareja_elegida.y)**2)
+        if dist_a_pareja < 15: # Umbral de cercanía para reproducirse
+            # La pareja también debe estar lista en este instante
+            if (pareja_elegida.edad >= pareja_elegida.edad_reproductiva and pareja_elegida.energia >= pareja_elegida.energia_para_reproducir and pareja_elegida.cooldown_reproduccion <= 0):
+                if random.random() < self.probabilidad_reproduccion:
+                    print(f"¡Nacimiento! {self.nombre} y {pareja_elegida.nombre} han tenido una cría.")
+                    ecosistema.agregar_animal(type(self))
+                    self.energia -= 30
+                    pareja_elegida.energia -= 30
+                    self.cooldown_reproduccion = 120 # Cooldown de 5 días (120 horas)
+                    pareja_elegida.cooldown_reproduccion = 120
+            self.estado = "deambulando" # Volver a deambular después del intento
+
+    def actualizar(self, ecosistema):
+        if not self.esta_vivo:
+            return
+
+        if self.ecosistema is None:
+            self.ecosistema = ecosistema
+
+        if self.cooldown_reproduccion > 0:
+            self.cooldown_reproduccion -= 1
+
+        # Lógica de comportamiento principal
+        if self.estado == "deambulando":
+            self.deambular()
+            # self._intentar_reproducir(ecosistema) # Desactivado para control manual
+        elif self.estado == "reproduciendose":
+            self.deambular() # Usamos deambular para movernos hacia el target
+            self._intentar_reproducir(ecosistema) # Re-evaluar en cada paso
+
+        # Consumo de energía y sed por existir y moverse
+        self._energia -= 0.05 # Coste base por hora
+        self._energia = max(0, self._energia)
+        self._sed += 0.5
+
+        if self._energia <= 0:
+            ecosistema.agregar_carcasa(self.x, self.y)
 
 class Herbivoro(Animal):
     pass
@@ -412,22 +553,39 @@ class Ecosistema:
 
         self.animales.extend(self.animales_nuevos)
         
+        # Actualizar estado de cada animal
+        for animal in self.animales:
+            animal.actualizar(self)
+
+        # Actualizar peces en cada río
+        for rio in self.terreno["rios"]:
+            for pez in rio.peces:
+                pez.actualizar()
+        
     def _obtener_posicion_inicial(self, tipo_animal):
         """Determina la posición inicial para un nuevo animal basado en su tipo."""
         intentos = 0
+        center_x = SIM_WIDTH // 2
+        center_y = SCREEN_HEIGHT // 2
+        thickness = 60
+        
+        rio_borde_izq = center_x - thickness // 2
+        rio_borde_der = center_x + thickness // 2
+        rio_borde_sup = center_y - thickness // 2
+
         while intentos < 100:
             if issubclass(tipo_animal, Carnivoro):
-                # Esquina superior izquierda
-                x = random.randint(20, 150)
-                y = random.randint(20, 150)
+                # Cuadrante superior izquierdo
+                x = random.randint(BORDE_MARGEN, rio_borde_izq - BORDE_MARGEN)
+                y = random.randint(BORDE_MARGEN, rio_borde_sup - BORDE_MARGEN)
             elif issubclass(tipo_animal, Herbivoro):
-                # Parte inferior del mapa
-                x = random.randint(20, SIM_WIDTH - 20)
-                y = random.randint(SCREEN_HEIGHT - 150, SCREEN_HEIGHT - 20)
+                # Cuadrante inferior
+                x = random.randint(BORDE_MARGEN, SIM_WIDTH - BORDE_MARGEN)
+                y = random.randint(rio_borde_sup + thickness, SCREEN_HEIGHT - BORDE_MARGEN)
             elif issubclass(tipo_animal, Omnivoro):
-                # Esquina superior derecha
-                x = random.randint(SIM_WIDTH - 150, SIM_WIDTH - 20)
-                y = random.randint(20, 150)
+                # Cuadrante superior derecho
+                x = random.randint(rio_borde_der + BORDE_MARGEN, SIM_WIDTH - BORDE_MARGEN)
+                y = random.randint(BORDE_MARGEN, rio_borde_sup - BORDE_MARGEN)
             
             if not self.choca_con_terreno(x, y) and not any(rio.rect.collidepoint(x, y) for rio in self.terreno["rios"]):
                 return x, y
@@ -439,6 +597,7 @@ class Ecosistema:
             nombre = f"{tipo_animal.__name__} {getattr(tipo_animal, 'contador', 0) + 1}"
         x, y = self._obtener_posicion_inicial(tipo_animal)
         nuevo_animal = tipo_animal(nombre, x, y)
+        nuevo_animal.ecosistema = self # Asignar referencia al ecosistema
         self.animales.append(nuevo_animal)
 
     def guardar_estado(self, archivo="save_state.json"):

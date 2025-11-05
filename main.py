@@ -187,7 +187,7 @@ class PygameView:
         ui_x = SIM_WIDTH
         margin = 15
         spacing = 10
-        btn_width = (UI_WIDTH - (2 * margin) - (2 * spacing)) / 3
+        btn_width = int((UI_WIDTH - (2 * margin) - (2 * spacing)) / 3)
         btn_height = 30
 
         col1_x = ui_x + margin
@@ -209,10 +209,10 @@ class PygameView:
         
         btn_width_small, btn_height_small = 90, 30
         buttons["save"] = Button(SIM_WIDTH + 10, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Guardar", (0, 100, 0), COLOR_TEXT)
-        buttons["load"] = Button(SIM_WIDTH + 105, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Cargar", (100, 100, 0), COLOR_TEXT)
-        buttons["restart"] = Button(SIM_WIDTH + 200, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Reiniciar", (200, 50, 50), COLOR_TEXT)
+        buttons["load"] = Button(SIM_WIDTH + 10 + btn_width_small + spacing, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Cargar", (100, 100, 0), COLOR_TEXT)
+        buttons["restart"] = Button(SIM_WIDTH + 10 + 2 * (btn_width_small + spacing), SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Reiniciar", (200, 50, 50), COLOR_TEXT)
         music_text = "Música: ON" if getattr(self, 'music_playing', False) else "Música: OFF"
-        buttons["music"] = Button(SIM_WIDTH + 295, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, music_text, (80, 80, 80), COLOR_TEXT)
+        buttons["music"] = Button(SIM_WIDTH + 10 + 3 * (btn_width_small + spacing), SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, music_text, (80, 80, 80), COLOR_TEXT)
         
         # Botones de acción para animal seleccionado
         buttons["force_eat"] = Button(SIM_WIDTH + 10, 220, 130, 30, "Forzar Comer", (0, 150, 0), COLOR_TEXT)
@@ -297,7 +297,6 @@ class PygameView:
             # Dibujar botones de acción si hay un animal seleccionado
             if "force_eat" in self.buttons: self.buttons["force_eat"].draw(self.screen)
             if "force_reproduce" in self.buttons: self.buttons["force_reproduce"].draw(self.screen)
-
         else:
             herb_count = sum(1 for a in ecosistema.animales if isinstance(a, Herbivoro))
             carn_count = sum(1 for a in ecosistema.animales if isinstance(a, Carnivoro))
@@ -327,13 +326,8 @@ class PygameView:
 
     def _create_static_background(self, ecosistema):
         """Crea la superficie de fondo con elementos que no cambian (terreno, decoraciones)."""
-        self.background_surface.fill(COLOR_SIM_AREA)
-        if self.terrain_textures.get("fondo"):
-            self._draw_tiled_texture(self.background_surface, self.terrain_textures["fondo"], self.background_surface.get_rect())
-
         self._draw_terrenos_estaticos(ecosistema)
         self._draw_decoraciones(ecosistema)
-
         self.needs_static_redraw = False
 
     def _draw_terrenos_estaticos(self, ecosistema):
@@ -391,6 +385,18 @@ class PygameView:
             pygame.draw.circle(temp_surface, COLOR_CARCASA + (alpha,), (5, 5), 5)
             self.screen.blit(temp_surface, (carcasa.x - 5, carcasa.y - 5))
 
+    def _draw_peces(self, ecosistema):
+        """Dibuja los peces en los ríos."""
+        pez_sprite = self.sprites.get("Pez")
+        for rio in ecosistema.terreno["rios"]:
+            for pez in rio.peces:
+                if pez_sprite:
+                    sprite_w, sprite_h = pez_sprite.get_size()
+                    self.screen.blit(pez_sprite, (pez.x - sprite_w // 2, pez.y - sprite_h // 2))
+                else:
+                    # Fallback a un círculo si no hay sprite
+                    pygame.draw.circle(self.screen, COLOR_PEZ, (pez.x, pez.y), 4)
+
     def draw_simulation(self, ecosistema, sim_over, animal_seleccionado, sim_speed):
         self.screen.fill(COLOR_BACKGROUND)
         
@@ -402,13 +408,15 @@ class PygameView:
         self.screen.blit(self.hierba_surface, (0, 0))
         self._draw_recursos(ecosistema)
         
+        self._draw_peces(ecosistema)
         self._draw_animales(ecosistema, animal_seleccionado)
         self._draw_ui(ecosistema, animal_seleccionado, sim_speed)
-        if not sim_over:
-            # Dibujar solo los botones que no dependen de la selección
-            for name, button in self.buttons.items():
-                if name not in ["force_eat", "force_reproduce"]:
-                    button.draw(self.screen)
+        
+        # Dibujar solo los botones que no dependen de la selección
+        for name, button in self.buttons.items():
+            if name not in ["force_eat", "force_reproduce"]:
+                button.draw(self.screen)
+
         self._draw_text("ESC para salir", self.font_small, COLOR_TEXT, self.screen, 10, SCREEN_HEIGHT - 25)
         if self.mouse_pos and self.mouse_pos[0] < SIM_WIDTH:
             coord_text = f"({self.mouse_pos[0]}, {self.mouse_pos[1]})"
@@ -523,8 +531,12 @@ class SimulationController:
 
     def _action_force_eat(self):
         if self.animal_seleccionado: print(f"Forzando a {self.animal_seleccionado.nombre} a buscar comida.")
+
     def _action_force_reproduce(self):
-        if self.animal_seleccionado: print(f"Forzando a {self.animal_seleccionado.nombre} a buscar pareja.")
+        if self.animal_seleccionado and self.animal_seleccionado.esta_vivo:
+            print(f"Intentando forzar la reproducción para {self.animal_seleccionado.nombre}.")
+            # Llamamos directamente a la lógica de reproducción para el animal seleccionado.
+            self.animal_seleccionado._intentar_reproducir(self.ecosistema)
 
     def _action_save(self): self.ecosistema.guardar_estado()
     def _action_load(self):
