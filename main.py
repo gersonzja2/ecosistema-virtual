@@ -244,6 +244,20 @@ class PygameView:
             self.ultimo_cambio_agua = current_time
             self.agua_frame_actual = (self.agua_frame_actual + 1) % len(self.agua_texturas)
 
+    def _draw_animal_bars(self, animal):
+        """Dibuja las barras de vida y sed sobre un animal."""
+        BAR_WIDTH = 20
+        BAR_HEIGHT = 3
+        Y_OFFSET_VIDA = 10  # Distancia sobre el animal para la barra de vida
+
+        # --- Barra de Vida (Energía) ---
+        vida_percent = animal.energia / animal.max_energia
+        vida_bar_width = int(BAR_WIDTH * vida_percent)
+        vida_bar_bg = pygame.Rect(animal.x - BAR_WIDTH // 2, animal.y - Y_OFFSET_VIDA, BAR_WIDTH, BAR_HEIGHT)
+        vida_bar_fill = pygame.Rect(animal.x - BAR_WIDTH // 2, animal.y - Y_OFFSET_VIDA, vida_bar_width, BAR_HEIGHT)
+        pygame.draw.rect(self.screen, (80, 0, 0), vida_bar_bg) # Fondo rojo oscuro
+        pygame.draw.rect(self.screen, (0, 255, 0), vida_bar_fill) # Relleno verde
+
     def _draw_animales(self, ecosistema, animal_seleccionado):
         for animal in ecosistema.animales:
             sprite = self.sprites.get(animal.__class__.__name__)
@@ -255,9 +269,16 @@ class PygameView:
             else:
                 # Si no hay sprite, dibuja un círculo de color como fallback
                 self._draw_fallback_animal(animal)
+            
+            # Dibujar las barras de estado para cada animal
+            self._draw_animal_bars(animal)
 
         if animal_seleccionado:
             pygame.draw.circle(self.screen, (255, 255, 0), (animal_seleccionado.x, animal_seleccionado.y), 10, 2)
+
+    def _draw_pareja_seleccionada(self, pareja):
+        if pareja:
+            pygame.draw.circle(self.screen, (255, 0, 255), (pareja.x, pareja.y), 10, 2) # Color magenta para la pareja
 
     def _draw_fallback_animal(self, animal):
         """Dibuja un círculo de color para un animal si su sprite no está disponible."""
@@ -267,7 +288,7 @@ class PygameView:
         elif isinstance(animal, Omnivoro): color = COLOR_OMNIVORO
         pygame.draw.circle(self.screen, color, (int(animal.x), int(animal.y)), 7)
 
-    def _draw_ui(self, ecosistema, animal_seleccionado, sim_speed):
+    def _draw_ui(self, ecosistema, animal_seleccionado, pareja_seleccionada, sim_speed):
         ui_x = SIM_WIDTH + 10
         ui_rect = pygame.Rect(SIM_WIDTH, 0, UI_WIDTH, SCREEN_HEIGHT)
         pygame.draw.rect(self.screen, COLOR_BACKGROUND, ui_rect)
@@ -286,13 +307,18 @@ class PygameView:
                 f"Nombre: {animal_seleccionado.nombre}",
                 f"Tipo: {animal_seleccionado.__class__.__name__}",
                 f"Energía: {animal_seleccionado.energia}/{animal_seleccionado.max_energia}",
-                f"Sed: {animal_seleccionado._sed}/150",
                 f"Estado: {'Vivo' if animal_seleccionado.esta_vivo else 'Muerto'}",
                 f"Edad: {animal_seleccionado.edad}"
             ]
             for line in info:
                 self._draw_text(line, self.font_small, COLOR_TEXT, self.screen, ui_x, y_offset)
                 y_offset += 15
+            
+            if pareja_seleccionada:
+                y_offset += 5
+                self._draw_text("Pareja seleccionada:", self.font_small, (255, 0, 255), self.screen, ui_x, y_offset)
+                y_offset += 15
+                self._draw_text(f" - {pareja_seleccionada.nombre}", self.font_small, (255, 0, 255), self.screen, ui_x, y_offset)
             
             # Dibujar botones de acción si hay un animal seleccionado
             if "force_eat" in self.buttons: self.buttons["force_eat"].draw(self.screen)
@@ -397,7 +423,7 @@ class PygameView:
                     # Fallback a un círculo si no hay sprite
                     pygame.draw.circle(self.screen, COLOR_PEZ, (pez.x, pez.y), 4)
 
-    def draw_simulation(self, ecosistema, sim_over, animal_seleccionado, sim_speed):
+    def draw_simulation(self, ecosistema, sim_over, animal_seleccionado, pareja_seleccionada, sim_speed):
         self.screen.fill(COLOR_BACKGROUND)
         
         if self.needs_static_redraw:
@@ -410,7 +436,8 @@ class PygameView:
         
         self._draw_peces(ecosistema)
         self._draw_animales(ecosistema, animal_seleccionado)
-        self._draw_ui(ecosistema, animal_seleccionado, sim_speed)
+        self._draw_pareja_seleccionada(pareja_seleccionada)
+        self._draw_ui(ecosistema, animal_seleccionado, pareja_seleccionada, sim_speed)
         
         # Dibujar solo los botones que no dependen de la selección
         for name, button in self.buttons.items():
@@ -464,6 +491,7 @@ class SimulationController:
         self.view = PygameView()
         self.dias_simulacion = dias_simulacion
         self.animal_seleccionado = None
+        self.pareja_seleccionada = None
         self.paused = True
         
         self.sim_speed_multiplier = 3
@@ -474,7 +502,7 @@ class SimulationController:
     def _poblar_ecosistema(self):
         tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto]
         for tipo in tipos_de_animales:
-            for _ in range(10):
+            for _ in range(2):
                 self.ecosistema.agregar_animal(tipo)
 
     def _avanzar_dia(self):
@@ -533,10 +561,17 @@ class SimulationController:
         if self.animal_seleccionado: print(f"Forzando a {self.animal_seleccionado.nombre} a buscar comida.")
 
     def _action_force_reproduce(self):
-        if self.animal_seleccionado and self.animal_seleccionado.esta_vivo:
-            print(f"Intentando forzar la reproducción para {self.animal_seleccionado.nombre}.")
-            # Llamamos directamente a la lógica de reproducción para el animal seleccionado.
-            self.animal_seleccionado._intentar_reproducir(self.ecosistema)
+        if self.animal_seleccionado and self.pareja_seleccionada and self.animal_seleccionado.esta_vivo and self.pareja_seleccionada.esta_vivo:
+            if type(self.animal_seleccionado) is not type(self.pareja_seleccionada):
+                print("Error: Los animales deben ser de la misma especie para reproducirse.")
+                return
+
+            print(f"Forzando reproducción entre {self.animal_seleccionado.nombre} y {self.pareja_seleccionada.nombre}.")
+            # Hacemos que el primer animal se mueva hacia el segundo.
+            self.animal_seleccionado._iniciar_reproduccion(self.pareja_seleccionada, self.ecosistema)
+            self.pareja_seleccionada._iniciar_reproduccion(self.animal_seleccionado, self.ecosistema)
+        else:
+            print("Debes seleccionar dos animales vivos de la misma especie para forzar la reproducción.")
 
     def _action_save(self): self.ecosistema.guardar_estado()
     def _action_load(self):
@@ -549,6 +584,7 @@ class SimulationController:
         self._poblar_ecosistema()
         self.view.graph.history.clear()
         self.animal_seleccionado = None
+        self.pareja_seleccionada = None
         self.view.update_hierba_surface(self.ecosistema)
         self.view.needs_static_redraw = True
         self.paused = True
@@ -578,7 +614,7 @@ class SimulationController:
                 
             running, sim_over = self.handle_events(running, sim_over)
 
-            self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.sim_speed_multiplier)
+            self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier)
     
         self.view.close()
 
@@ -598,7 +634,7 @@ class SimulationController:
                 
                 # Determinar qué botones están activos para la comprobación de clics
                 active_buttons = list(self.view.buttons.keys())
-                if not self.animal_seleccionado:
+                if not self.animal_seleccionado or not self.pareja_seleccionada:
                     active_buttons = [b for b in active_buttons if b not in ["force_eat", "force_reproduce"]]
                 clicked_button_name = self.get_clicked_button(pos, active_buttons)
                 if clicked_button_name:
@@ -619,12 +655,22 @@ class SimulationController:
 
     def select_animal_at(self, pos):
         if pos[0] < SIM_WIDTH:
-            self.animal_seleccionado = None
+            animal_clicado = None
             for animal in reversed(self.ecosistema.animales):
                 dist_sq = (animal.x - pos[0])**2 + (animal.y - pos[1])**2
                 if dist_sq < 12**2:
-                    self.animal_seleccionado = animal
+                    animal_clicado = animal
                     break
+            
+            if not animal_clicado:
+                # Si se hace clic en espacio vacío, se deselecciona todo.
+                self.animal_seleccionado = None
+                self.pareja_seleccionada = None
+            elif not self.animal_seleccionado or self.animal_seleccionado == animal_clicado:
+                self.animal_seleccionado = animal_clicado
+                self.pareja_seleccionada = None # Deseleccionar pareja si se vuelve a clicar el principal
+            else: # Si ya hay un animal seleccionado y se clica en otro diferente
+                self.pareja_seleccionada = animal_clicado
 
 def main():
     controlador = SimulationController(dias_simulacion=200)
