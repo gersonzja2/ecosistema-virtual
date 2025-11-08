@@ -109,11 +109,6 @@ class Animal(ABC):
         self.target_y = None
         self.tiempo_deambulando = 0
         self.ecosistema = None
-
-        self.edad_reproductiva = 5 # Días
-        self.energia_para_reproducir = 60
-        self.probabilidad_reproduccion = 0.5 # 50% de probabilidad por hora si las condiciones se dan
-        self.cooldown_reproduccion = 0
         
         type(self).contador = getattr(type(self), 'contador', 0) + 1
 
@@ -192,57 +187,6 @@ class Animal(ABC):
 
         self.tiempo_deambulando -= 1
 
-    def _moverse_hacia_objetivo(self):
-        """Se mueve directamente hacia self.target_x y self.target_y."""
-        if self.target_x is None:
-            return
-
-        dx = self.target_x - self._x_float
-        dy = self.target_y - self._y_float
-        dist = math.sqrt(dx**2 + dy**2)
-
-        if dist < self.velocidad:
-            self._x_float = self.target_x
-            self._y_float = self.target_y
-        else:
-            self._x_float += (dx / dist) * self.velocidad
-            self._y_float += (dy / dist) * self.velocidad
-
-    def _iniciar_reproduccion(self, pareja_elegida, ecosistema):
-        """Inicia el proceso de reproducción forzada hacia una pareja específica."""
-        # Moverse hacia la pareja
-        self.estado = "reproduciendose"
-        self.pareja_objetivo = pareja_elegida # Guardamos la referencia directa a la pareja
-        self.target_x = self.pareja_objetivo.x
-        self.target_y = self.pareja_objetivo.y
-        print(f"{self.nombre} se dirige a reproducirse con {pareja_elegida.nombre}.")
-
-    def _intentar_fecundacion(self, ecosistema):
-        """Comprueba si está cerca de su objetivo de reproducción y, si es así, intenta la fecundación."""
-        if not hasattr(self, 'pareja_objetivo') or not self.pareja_objetivo.esta_vivo:
-            # Si la pareja ya no existe o murió, cancelamos.
-            print(f"{self.nombre} perdió de vista a su pareja y cancela la reproducción.")
-            self.estado = "deambulando"
-            self.pareja_objetivo = None
-            return
-
-        # Actualizamos el punto de destino por si la pareja se movió
-        self.target_x = self.pareja_objetivo.x
-        self.target_y = self.pareja_objetivo.y
-
-        dist_a_pareja = math.sqrt((self.x - self.pareja_objetivo.x)**2 + (self.y - self.pareja_objetivo.y)**2)
-        if dist_a_pareja < 15:
-            # Sin condiciones, la reproducción siempre tiene éxito al estar cerca.
-            # Solo el animal con el ID más bajo genera la cría para evitar duplicados.
-            if type(self) is type(self.pareja_objetivo) and id(self) < id(self.pareja_objetivo):
-                print(f"¡Nacimiento! {self.nombre} y {self.pareja_objetivo.nombre} han tenido una cría.")
-                ecosistema.agregar_animal(type(self))
-            
-            # Ambos animales vuelven a deambular
-            self.estado = "deambulando"
-            self.pareja_objetivo.estado = "deambulando"
-            self.pareja_objetivo = None
-
     def actualizar(self, ecosistema):
         if not self.esta_vivo:
             return
@@ -250,18 +194,9 @@ class Animal(ABC):
         if self.ecosistema is None:
             self.ecosistema = ecosistema
 
-        if self.cooldown_reproduccion > 0:
-            self.cooldown_reproduccion -= 1
-
-        # El movimiento siempre se actualiza si hay un objetivo
-        if self.estado == "reproduciendose":
-            self._moverse_hacia_objetivo()
-
         # Lógica de comportamiento principal
         if self.estado == "deambulando":
             self.deambular()
-        elif self.estado == "reproduciendose":
-            self._intentar_fecundacion(ecosistema) # Comprobar si hemos llegado
 
         # Consumo de energía y sed por existir y moverse
         self._energia -= 0.05 # Coste base por hora

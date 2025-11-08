@@ -214,9 +214,6 @@ class PygameView:
         music_text = "Música: ON" if getattr(self, 'music_playing', False) else "Música: OFF"
         buttons["music"] = Button(SIM_WIDTH + 10 + 3 * (btn_width_small + spacing), SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, music_text, (80, 80, 80), COLOR_TEXT)
         
-        # Botones de acción para animal seleccionado
-        buttons["force_eat"] = Button(SIM_WIDTH + 10, 220, 130, 30, "Forzar Comer", (0, 150, 0), COLOR_TEXT)
-        buttons["force_reproduce"] = Button(SIM_WIDTH + 150, 220, 130, 30, "Forzar Reprod.", (200, 0, 200), COLOR_TEXT)
         return buttons
 
     def _draw_text(self, text, font, color, surface, x, y):
@@ -313,16 +310,6 @@ class PygameView:
             for line in info:
                 self._draw_text(line, self.font_small, COLOR_TEXT, self.screen, ui_x, y_offset)
                 y_offset += 15
-            
-            if pareja_seleccionada:
-                y_offset += 5
-                self._draw_text("Pareja seleccionada:", self.font_small, (255, 0, 255), self.screen, ui_x, y_offset)
-                y_offset += 15
-                self._draw_text(f" - {pareja_seleccionada.nombre}", self.font_small, (255, 0, 255), self.screen, ui_x, y_offset)
-            
-            # Dibujar botones de acción si hay un animal seleccionado
-            if "force_eat" in self.buttons: self.buttons["force_eat"].draw(self.screen)
-            if "force_reproduce" in self.buttons: self.buttons["force_reproduce"].draw(self.screen)
         else:
             herb_count = sum(1 for a in ecosistema.animales if isinstance(a, Herbivoro))
             carn_count = sum(1 for a in ecosistema.animales if isinstance(a, Carnivoro))
@@ -441,8 +428,7 @@ class PygameView:
         
         # Dibujar solo los botones que no dependen de la selección
         for name, button in self.buttons.items():
-            if name not in ["force_eat", "force_reproduce"]:
-                button.draw(self.screen)
+            button.draw(self.screen)
 
         self._draw_text("ESC para salir", self.font_small, COLOR_TEXT, self.screen, 10, SCREEN_HEIGHT - 25)
         if self.mouse_pos and self.mouse_pos[0] < SIM_WIDTH:
@@ -553,26 +539,6 @@ class SimulationController:
         for name, cls in animal_map.items():
             self.button_actions[f"add_{name}"] = lambda species=cls: self.ecosistema.agregar_animal(species)
         
-        # Acciones para los nuevos botones
-        self.button_actions["force_eat"] = self._action_force_eat
-        self.button_actions["force_reproduce"] = self._action_force_reproduce
-
-    def _action_force_eat(self):
-        if self.animal_seleccionado: print(f"Forzando a {self.animal_seleccionado.nombre} a buscar comida.")
-
-    def _action_force_reproduce(self):
-        if self.animal_seleccionado and self.pareja_seleccionada and self.animal_seleccionado.esta_vivo and self.pareja_seleccionada.esta_vivo:
-            if type(self.animal_seleccionado) is not type(self.pareja_seleccionada):
-                print("Error: Los animales deben ser de la misma especie para reproducirse.")
-                return
-
-            print(f"Forzando reproducción entre {self.animal_seleccionado.nombre} y {self.pareja_seleccionada.nombre}.")
-            # Hacemos que el primer animal se mueva hacia el segundo.
-            self.animal_seleccionado._iniciar_reproduccion(self.pareja_seleccionada, self.ecosistema)
-            self.pareja_seleccionada._iniciar_reproduccion(self.animal_seleccionado, self.ecosistema)
-        else:
-            print("Debes seleccionar dos animales vivos de la misma especie para forzar la reproducción.")
-
     def _action_save(self): self.ecosistema.guardar_estado()
     def _action_load(self):
         try: self.ecosistema.cargar_estado(); self.view.graph.history = []; self.view.update_hierba_surface(self.ecosistema); self.view.needs_static_redraw = True
@@ -634,8 +600,6 @@ class SimulationController:
                 
                 # Determinar qué botones están activos para la comprobación de clics
                 active_buttons = list(self.view.buttons.keys())
-                if not self.animal_seleccionado or not self.pareja_seleccionada:
-                    active_buttons = [b for b in active_buttons if b not in ["force_eat", "force_reproduce"]]
                 clicked_button_name = self.get_clicked_button(pos, active_buttons)
                 if clicked_button_name:
                     action = self.button_actions.get(clicked_button_name)
