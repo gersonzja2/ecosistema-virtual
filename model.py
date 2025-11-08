@@ -718,6 +718,19 @@ class Mono(Omnivoro):
         
 class Ecosistema:
     def __init__(self):
+        # Carga el sonido del río
+        self.sonido_rio = pygame.mixer.Sound("assets/Sonidos listos/rio 1.wav")  # Ajusta la ruta si es necesario
+        self.sonido_rio.set_volume(1.5)# Ajusta el volumen si es necesario
+        # Otros atributos del ecosistema
+        self.animales = []
+        self.clima_actual = "Soleado"  # Clima inicial
+        self._ticks_clima = 0  # Contador de clima
+
+    def reproducir_sonido_rio(self):
+        """Reproduce el sonido del río en bucle"""
+        self.sonido_rio.play(-1)  # -1 para hacer que suene en bucle
+
+    def __init__(self):
         # Lista de todas las clases de animales para el rescate anti-extinción
         self.tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto]
 
@@ -1018,4 +1031,4 @@ class Ecosistema:
                                     max_energia=a_data.get("max_energia", max_energia_default))
                 animal._sed = a_data.get("sed", 0)
                 animal.estado = a_data.get("estado", "deambulando")
-                self.animales.append(animal)   
+                self.animales.append(animal)
