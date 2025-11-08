@@ -18,6 +18,7 @@ COLOR_SELVA = (39, 174, 96)
 COLOR_BUTTON = (26, 188, 156)
 COLOR_PEZ = (0, 191, 255)
 COLOR_CARCASA = (128, 128, 128)
+
 class PopulationGraph:
     def __init__(self, x, y, width, height, font):
         self.rect = pygame.Rect(x, y, width, height)
@@ -143,13 +144,12 @@ class PygameView:
         for name, data in sprite_definitions.items():
             try:
                 sprites[name] = pygame.transform.scale(pygame.image.load(f"assets/{data['file']}"), data['size'])
-            except (pygame.error, FileNotFoundError) as e:
+            except (pygame.error, FileNotFoundError):
                 print(f"ADVERTENCIA: No se pudo cargar el sprite '{data['file']}'. Se usará un marcador de posición si es necesario.")
         
         if not sprites:
             print("\n--- ADVERTENCIA GENERAL: No se encontró ningún archivo de sprite en la carpeta 'assets' ---")
             print("La simulación usará círculos de colores para todos los animales.")
-            print("Para usar sprites, asegúrate de que la carpeta 'assets' contenga los archivos .png correspondientes.\n")
         return sprites
 
     def _load_terrain_textures(self):
@@ -182,13 +182,12 @@ class PygameView:
             print("Advertencia: No se encontraron texturas de agua (ej: assets/fondo_agua0.png). Se usará un color sólido.")
         return texturas
 
-
     def _create_buttons(self):
         buttons = {}
         ui_x = SIM_WIDTH
         margin = 15
         spacing = 10
-        btn_width = (UI_WIDTH - (2 * margin) - (2 * spacing)) / 3
+        btn_width = int((UI_WIDTH - (2 * margin) - (2 * spacing)) / 3)
         btn_height = 30
 
         col1_x = ui_x + margin
@@ -210,10 +209,11 @@ class PygameView:
         
         btn_width_small, btn_height_small = 90, 30
         buttons["save"] = Button(SIM_WIDTH + 10, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Guardar", (0, 100, 0), COLOR_TEXT)
-        buttons["load"] = Button(SIM_WIDTH + 105, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Cargar", (100, 100, 0), COLOR_TEXT)
-        buttons["restart"] = Button(SIM_WIDTH + 200, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Reiniciar", (200, 50, 50), COLOR_TEXT)
+        buttons["load"] = Button(SIM_WIDTH + 10 + btn_width_small + spacing, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Cargar", (100, 100, 0), COLOR_TEXT)
+        buttons["restart"] = Button(SIM_WIDTH + 10 + 2 * (btn_width_small + spacing), SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Reiniciar", (200, 50, 50), COLOR_TEXT)
         music_text = "Música: ON" if getattr(self, 'music_playing', False) else "Música: OFF"
-        buttons["music"] = Button(SIM_WIDTH + 295, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, music_text, (80, 80, 80), COLOR_TEXT)
+        buttons["music"] = Button(SIM_WIDTH + 10 + 3 * (btn_width_small + spacing), SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, music_text, (80, 80, 80), COLOR_TEXT)
+        
         return buttons
 
     def _draw_text(self, text, font, color, surface, x, y):
@@ -241,35 +241,51 @@ class PygameView:
             self.ultimo_cambio_agua = current_time
             self.agua_frame_actual = (self.agua_frame_actual + 1) % len(self.agua_texturas)
 
+    def _draw_animal_bars(self, animal):
+        """Dibuja las barras de vida y sed sobre un animal."""
+        BAR_WIDTH = 20
+        BAR_HEIGHT = 3
+        Y_OFFSET_VIDA = 10  # Distancia sobre el animal para la barra de vida
+
+        # --- Barra de Vida (Energía) ---
+        vida_percent = animal.energia / animal.max_energia
+        vida_bar_width = int(BAR_WIDTH * vida_percent)
+        vida_bar_bg = pygame.Rect(animal.x - BAR_WIDTH // 2, animal.y - Y_OFFSET_VIDA, BAR_WIDTH, BAR_HEIGHT)
+        vida_bar_fill = pygame.Rect(animal.x - BAR_WIDTH // 2, animal.y - Y_OFFSET_VIDA, vida_bar_width, BAR_HEIGHT)
+        pygame.draw.rect(self.screen, (80, 0, 0), vida_bar_bg) # Fondo rojo oscuro
+        pygame.draw.rect(self.screen, (0, 255, 0), vida_bar_fill) # Relleno verde
+
     def _draw_animales(self, ecosistema, animal_seleccionado):
-        if self.sprites:
-            for animal in ecosistema.animales:                
-                sprite = self.sprites.get(animal.__class__.__name__) if self.sprites else None
-                if not sprite: # Si el sprite específico no se cargó, usa el círculo
-                    self._draw_fallback_animal(animal)
-                    continue
+        for animal in ecosistema.animales:
+            sprite = self.sprites.get(animal.__class__.__name__)
+            if sprite:
                 sprite_w, sprite_h = sprite.get_size()
                 sprite_pos_x = animal.x - sprite_w // 2
                 sprite_pos_y = animal.y - sprite_h // 2
                 self.screen.blit(sprite, (sprite_pos_x, sprite_pos_y))
-        else:
-            for animal in ecosistema.animales:
-                color = (0,0,0)
-                if isinstance(animal, Herbivoro): color = COLOR_HERBIVORO
-                elif isinstance(animal, Carnivoro): color = COLOR_CARNIVORO
-                elif isinstance(animal, Omnivoro): color = COLOR_OMNIVORO
-                pygame.draw.circle(self.screen, color, (int(animal.x), int(animal.y)), 7)
+            else:
+                # Si no hay sprite, dibuja un círculo de color como fallback
+                self._draw_fallback_animal(animal)
+            
+            # Dibujar las barras de estado para cada animal
+            self._draw_animal_bars(animal)
+
         if animal_seleccionado:
             pygame.draw.circle(self.screen, (255, 255, 0), (animal_seleccionado.x, animal_seleccionado.y), 10, 2)
 
+    def _draw_pareja_seleccionada(self, pareja):
+        if pareja:
+            pygame.draw.circle(self.screen, (255, 0, 255), (pareja.x, pareja.y), 10, 2) # Color magenta para la pareja
+
     def _draw_fallback_animal(self, animal):
-        color = (0,0,0)
+        """Dibuja un círculo de color para un animal si su sprite no está disponible."""
+        color = (0, 0, 0)  # Color por defecto
         if isinstance(animal, Herbivoro): color = COLOR_HERBIVORO
         elif isinstance(animal, Carnivoro): color = COLOR_CARNIVORO
         elif isinstance(animal, Omnivoro): color = COLOR_OMNIVORO
         pygame.draw.circle(self.screen, color, (int(animal.x), int(animal.y)), 7)
 
-    def _draw_ui(self, ecosistema, animal_seleccionado, sim_speed):
+    def _draw_ui(self, ecosistema, animal_seleccionado, pareja_seleccionada, sim_speed):
         ui_x = SIM_WIDTH + 10
         ui_rect = pygame.Rect(SIM_WIDTH, 0, UI_WIDTH, SCREEN_HEIGHT)
         pygame.draw.rect(self.screen, COLOR_BACKGROUND, ui_rect)
@@ -288,8 +304,7 @@ class PygameView:
                 f"Nombre: {animal_seleccionado.nombre}",
                 f"Tipo: {animal_seleccionado.__class__.__name__}",
                 f"Energía: {animal_seleccionado.energia}/{animal_seleccionado.max_energia}",
-                f"Sed: {animal_seleccionado._sed}/150",
-                f"Estado: {animal_seleccionado.estado}",
+                f"Estado: {'Vivo' if animal_seleccionado.esta_vivo else 'Muerto'}",
                 f"Edad: {animal_seleccionado.edad}"
             ]
             for line in info:
@@ -324,13 +339,8 @@ class PygameView:
 
     def _create_static_background(self, ecosistema):
         """Crea la superficie de fondo con elementos que no cambian (terreno, decoraciones)."""
-        self.background_surface.fill(COLOR_SIM_AREA)
-        if self.terrain_textures.get("fondo"):
-            self._draw_tiled_texture(self.background_surface, self.terrain_textures["fondo"], self.background_surface.get_rect())
-
         self._draw_terrenos_estaticos(ecosistema)
         self._draw_decoraciones(ecosistema)
-
         self.needs_static_redraw = False
 
     def _draw_terrenos_estaticos(self, ecosistema):
@@ -388,7 +398,19 @@ class PygameView:
             pygame.draw.circle(temp_surface, COLOR_CARCASA + (alpha,), (5, 5), 5)
             self.screen.blit(temp_surface, (carcasa.x - 5, carcasa.y - 5))
 
-    def draw_simulation(self, ecosistema, sim_over, animal_seleccionado, sim_speed):
+    def _draw_peces(self, ecosistema):
+        """Dibuja los peces en los ríos."""
+        pez_sprite = self.sprites.get("Pez")
+        for rio in ecosistema.terreno["rios"]:
+            for pez in rio.peces:
+                if pez_sprite:
+                    sprite_w, sprite_h = pez_sprite.get_size()
+                    self.screen.blit(pez_sprite, (pez.x - sprite_w // 2, pez.y - sprite_h // 2))
+                else:
+                    # Fallback a un círculo si no hay sprite
+                    pygame.draw.circle(self.screen, COLOR_PEZ, (pez.x, pez.y), 4)
+
+    def draw_simulation(self, ecosistema, sim_over, animal_seleccionado, pareja_seleccionada, sim_speed):
         self.screen.fill(COLOR_BACKGROUND)
         
         if self.needs_static_redraw:
@@ -399,12 +421,15 @@ class PygameView:
         self.screen.blit(self.hierba_surface, (0, 0))
         self._draw_recursos(ecosistema)
         
+        self._draw_peces(ecosistema)
         self._draw_animales(ecosistema, animal_seleccionado)
-        self._draw_ui(ecosistema, animal_seleccionado, sim_speed)
-        if not sim_over:
-            for button in self.buttons.values():
-                button.draw(self.screen)
+        self._draw_pareja_seleccionada(pareja_seleccionada)
+        self._draw_ui(ecosistema, animal_seleccionado, pareja_seleccionada, sim_speed)
         
+        # Dibujar solo los botones que no dependen de la selección
+        for name, button in self.buttons.items():
+            button.draw(self.screen)
+
         self._draw_text("ESC para salir", self.font_small, COLOR_TEXT, self.screen, 10, SCREEN_HEIGHT - 25)
         if self.mouse_pos and self.mouse_pos[0] < SIM_WIDTH:
             coord_text = f"({self.mouse_pos[0]}, {self.mouse_pos[1]})"
@@ -452,6 +477,7 @@ class SimulationController:
         self.view = PygameView()
         self.dias_simulacion = dias_simulacion
         self.animal_seleccionado = None
+        self.pareja_seleccionada = None
         self.paused = True
         
         self.sim_speed_multiplier = 3
@@ -462,7 +488,7 @@ class SimulationController:
     def _poblar_ecosistema(self):
         tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto]
         for tipo in tipos_de_animales:
-            for _ in range(10):
+            for _ in range(2):
                 self.ecosistema.agregar_animal(tipo)
 
     def _avanzar_dia(self):
@@ -512,7 +538,7 @@ class SimulationController:
         
         for name, cls in animal_map.items():
             self.button_actions[f"add_{name}"] = lambda species=cls: self.ecosistema.agregar_animal(species)
-
+        
     def _action_save(self): self.ecosistema.guardar_estado()
     def _action_load(self):
         try: self.ecosistema.cargar_estado(); self.view.graph.history = []; self.view.update_hierba_surface(self.ecosistema); self.view.needs_static_redraw = True
@@ -524,6 +550,7 @@ class SimulationController:
         self._poblar_ecosistema()
         self.view.graph.history.clear()
         self.animal_seleccionado = None
+        self.pareja_seleccionada = None
         self.view.update_hierba_surface(self.ecosistema)
         self.view.needs_static_redraw = True
         self.paused = True
@@ -553,7 +580,7 @@ class SimulationController:
                 
             running, sim_over = self.handle_events(running, sim_over)
 
-            self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.sim_speed_multiplier)
+            self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier)
     
         self.view.close()
 
@@ -570,7 +597,10 @@ class SimulationController:
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and not sim_over:
                 pos = pygame.mouse.get_pos()
-                clicked_button_name = self.get_clicked_button(pos)
+                
+                # Determinar qué botones están activos para la comprobación de clics
+                active_buttons = list(self.view.buttons.keys())
+                clicked_button_name = self.get_clicked_button(pos, active_buttons)
                 if clicked_button_name:
                     action = self.button_actions.get(clicked_button_name)
                     if action:
@@ -581,20 +611,30 @@ class SimulationController:
                     self.select_animal_at(pos)
         return running, sim_over
 
-    def get_clicked_button(self, pos):
-        for name, button in self.view.buttons.items():
-            if button.rect.collidepoint(pos):
+    def get_clicked_button(self, pos, button_keys):
+        for name in button_keys:
+            if self.view.buttons[name].rect.collidepoint(pos):
                 return name
         return None
 
     def select_animal_at(self, pos):
         if pos[0] < SIM_WIDTH:
-            self.animal_seleccionado = None
+            animal_clicado = None
             for animal in reversed(self.ecosistema.animales):
                 dist_sq = (animal.x - pos[0])**2 + (animal.y - pos[1])**2
                 if dist_sq < 12**2:
-                    self.animal_seleccionado = animal
+                    animal_clicado = animal
                     break
+            
+            if not animal_clicado:
+                # Si se hace clic en espacio vacío, se deselecciona todo.
+                self.animal_seleccionado = None
+                self.pareja_seleccionada = None
+            elif not self.animal_seleccionado or self.animal_seleccionado == animal_clicado:
+                self.animal_seleccionado = animal_clicado
+                self.pareja_seleccionada = None # Deseleccionar pareja si se vuelve a clicar el principal
+            else: # Si ya hay un animal seleccionado y se clica en otro diferente
+                self.pareja_seleccionada = animal_clicado
 
 def main():
     controlador = SimulationController(dias_simulacion=200)
