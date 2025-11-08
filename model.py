@@ -1018,4 +1018,4 @@ class Ecosistema:
                                     max_energia=a_data.get("max_energia", max_energia_default))
                 animal._sed = a_data.get("sed", 0)
                 animal.estado = a_data.get("estado", "deambulando")
-                self.animales.append(animal)
+                self.animales.append(animal)   
