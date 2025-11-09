@@ -1,10 +1,9 @@
+
 import pygame
 import random
-from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, Halcon, Insecto, CELL_SIZE, MAX_HIERBA_PRADERA, Rio, Pez
+from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, Halcon, Insecto, Rio, Pez, CELL_SIZE, MAX_HIERBA_PRADERA, SIM_WIDTH, SCREEN_HEIGHT
 
 SCREEN_WIDTH = 1200
-SCREEN_HEIGHT = 700
-SIM_WIDTH = 800
 UI_WIDTH = 400
 COLOR_BACKGROUND = (22, 160, 133)
 COLOR_SIM_AREA = (46, 204, 113)
@@ -82,6 +81,31 @@ class Button:
         text_rect = text_surf.get_rect(center=self.rect.center)
         surface.blit(text_surf, text_rect)
 
+class Cloud:
+    """Representa una nube que se mueve por la pantalla."""
+    def __init__(self, image, screen_width, screen_height, y_range):
+        self.image = image
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        self.y_range = y_range
+        self.reset(on_screen=True) # Inicia en una posición aleatoria en pantalla
+
+    def reset(self, on_screen=False):
+        """Reinicia la posición y velocidad de la nube."""
+        self.speed = random.uniform(0.2, 0.8) # Velocidad lenta y variable
+        self.y = random.randint(self.y_range[0], self.y_range[1]) # Aparecen en el rango Y especificado
+        # Si on_screen es True, la posiciona en cualquier parte de la pantalla. Si no, a la izquierda.
+        if on_screen:
+            self.x = random.randint(0, self.screen_width)
+        else:
+            self.x = random.randint(-self.image.get_width() - 200, -self.image.get_width())
+
+    def update(self):
+        """Mueve la nube y la reinicia si sale de la pantalla."""
+        self.x += self.speed
+        if self.x > self.screen_width:
+            self.reset()
+
 class PygameView:
     def __init__(self):
         pygame.init()
@@ -123,6 +147,9 @@ class PygameView:
         self.hierba_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         self.background_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT))
         self.needs_static_redraw = True
+        self.top_clouds = self._create_clouds(y_range=(5, SCREEN_HEIGHT // 3), count=10)
+        self.middle_clouds = self._create_clouds(y_range=(SCREEN_HEIGHT // 3 + 10, SCREEN_HEIGHT // 2 - 70), count=5)
+        self.bottom_clouds = self._create_clouds(y_range=(SCREEN_HEIGHT // 2 + 60, SCREEN_HEIGHT - 70), count=8)
 
     def _load_sprites(self):
         sprites = {}
@@ -137,9 +164,10 @@ class PygameView:
             "Halcon": {"file": "halcon.png", "size": (15, 15)},
             "Insecto": {"file": "insecto.png", "size": (8, 8)},
             "Pez": {"file": "pez.png", "size": (10, 10)},
-            "arbol": {"file": "arbol_medium.png", "size": (30, 30)},
-            "planta": {"file": "planta_small.png", "size": (12, 12)},
-            "hierba": {"file": "hierba.png", "size": (20, 20)}
+            "arbol": {"file": "arbol_1.png", "size": (30, 50)},
+            "planta": {"file": "plantas_1.png", "size": (30, 30)},
+            "planta_2": {"file": "plantas_2.png", "size": (30, 30)},
+            "nube": {"file": "texturas_nubes.png", "size": (120, 60)}
         }
         sprite_definitions["carcasa"] = {"file": "esqueleto.png", "size": (15, 15)}
         for name, data in sprite_definitions.items():
@@ -148,6 +176,30 @@ class PygameView:
             except (pygame.error, FileNotFoundError):
                 print(f"ADVERTENCIA: No se pudo cargar el sprite '{data['file']}'. Se usará un marcador de posición si es necesario.")
         
+        # Carga especial para el puente para mantener la relación de aspecto
+        try:
+            puente_img = pygame.image.load("assets/textura_puente.png")
+            original_width, original_height = puente_img.get_size()
+            target_height = 70  # Queremos que el puente sea un poco más alto que el río (60px)
+            aspect_ratio = original_width / original_height
+            target_width = int(target_height * aspect_ratio)
+            sprites["puente"] = pygame.transform.scale(puente_img, (target_width, target_height))
+        except (pygame.error, FileNotFoundError):
+            print("ADVERTENCIA: No se pudo cargar el sprite 'textura_puente.png'.")
+
+        # Carga especial para el puente horizontal, rotando la textura
+        # La imagen textura_puente2.png ya es horizontal, así que no la rotamos.
+        try:
+            puente_h_img = pygame.image.load("assets/textura_puente2.png")
+            original_width, original_height = puente_h_img.get_size()
+            target_height = 70 # Queremos que el puente tenga una altura de 70px para cruzar el río de 60px
+            aspect_ratio = original_width / original_height # Aspecto original de la imagen horizontal
+            target_width = int(target_height * aspect_ratio) # Calculamos el ancho proporcional
+            sprites["puente_horizontal"] = pygame.transform.scale(puente_h_img, (target_width, target_height))
+        except (pygame.error, FileNotFoundError):
+            print("ADVERTENCIA: No se pudo cargar el sprite 'textura_puente2.png' para el puente horizontal.")
+
+
         if not sprites:
             print("\n--- ADVERTENCIA GENERAL: No se encontró ningún archivo de sprite en la carpeta 'assets' ---")
             print("La simulación usará círculos de colores para todos los animales.")
@@ -158,7 +210,9 @@ class PygameView:
         texture_files = {
             "fondo": "textura_fondo.png",
             "montana": "textura_montana.png",
-            "santuario": "textura_santuario.png"
+            "santuario": "textura_santuario.png",
+            "selva": "textura_selva.png",
+            "pradera": "textura_pradera.png"
         }
         for name, filename in texture_files.items():
             try:
@@ -221,6 +275,16 @@ class PygameView:
         buttons["force_reproduce"] = Button(SIM_WIDTH + 205, info_panel_y, 180, 30, "Forzar Reproducción", (142, 68, 173), COLOR_TEXT)
 
         return buttons
+
+    def _create_clouds(self, y_range, count):
+        """Crea la lista inicial de nubes."""
+        cloud_sprite = self.sprites.get("nube")
+        if not cloud_sprite:
+            return []
+        
+        # Aseguramos que la nube tenga transparencia
+        cloud_sprite_alpha = cloud_sprite.convert_alpha()
+        return [Cloud(cloud_sprite_alpha, SIM_WIDTH, SCREEN_HEIGHT, y_range) for _ in range(count)]
 
     def _draw_text(self, text, font, color, surface, x, y):
         text_shadow = font.render(text, 1, (0, 0, 0))
@@ -354,21 +418,21 @@ class PygameView:
         self.needs_static_redraw = False
 
     def _draw_terrenos_estaticos(self, ecosistema):
-        self.background_surface.fill(COLOR_SIM_AREA)
-        if self.terrain_textures.get("fondo"):
-            self._draw_tiled_texture(self.background_surface, self.terrain_textures["fondo"], self.background_surface.get_rect())
+        """Dibuja las texturas de fondo y luego las áreas de terreno específicas."""
+        # 1. Dibuja la textura de fondo general en toda la superficie de la simulación.
+        fondo_texture = self.terrain_textures.get("fondo")
+        if fondo_texture:
+            self._draw_tiled_texture(self.background_surface, fondo_texture, self.background_surface.get_rect())
 
-        for tipo_terreno, datos in {
-            "praderas": {"texture": self.terrain_textures.get("fondo"), "color": (144, 238, 144)},
-            "selvas": {"texture": self.terrain_textures.get("fondo"), "color": COLOR_SELVA},
-            "santuarios": {"texture": self.terrain_textures.get("santuario"), "color": (218, 165, 32)},
-            "montanas": {"texture": self.terrain_textures.get("montana"), "color": (139, 137, 137)}
-        }.items():
-            for terreno in ecosistema.terreno[tipo_terreno]:
-                if datos["texture"]:
-                    self._draw_tiled_texture(self.background_surface, datos["texture"], terreno.rect)
-                else:
-                    pygame.draw.rect(self.background_surface, datos["color"], terreno.rect)
+        # 2. Dibuja cada área de terreno específica sobre el fondo.
+        # El orden aquí importa: las selvas se dibujarán encima de las praderas si se superponen.
+        terrain_types_to_draw = ["praderas", "selvas", "santuarios", "montanas"]
+
+        for terrain_name in terrain_types_to_draw:
+            texture = self.terrain_textures.get(terrain_name[:-1]) # "praderas" -> "pradera"
+            if texture:
+                for terreno_obj in ecosistema.terreno[terrain_name]:
+                    self._draw_tiled_texture(self.background_surface, texture, terreno_obj.rect)
 
     def _draw_rios(self, ecosistema):
         """Dibuja los ríos, actualizando la animación del agua."""
@@ -379,27 +443,51 @@ class PygameView:
             else:
                 pygame.draw.rect(self.screen, COLOR_RIO, rio.rect)
 
+    def _draw_puentes(self, ecosistema):
+        """Dibuja los puentes sobre el mapa."""
+        sprite_puente_v = self.sprites.get("puente") # Textura para puentes verticales
+        sprite_puente_h = self.sprites.get("puente_horizontal") # Textura para puentes horizontales
+        center_x = SIM_WIDTH // 2
+
+        for x, y in ecosistema.terreno["puentes"]:
+            # Si la coordenada X del puente es la del centro + 1, es el puente superior (horizontal).
+            if x == center_x + 2 and sprite_puente_h:
+                sprite_a_usar = sprite_puente_h
+            # Para todos los demás puentes, usamos la textura vertical.
+            elif sprite_puente_v:
+                sprite_a_usar = sprite_puente_v
+            else:
+                continue # Si no hay sprites, no dibujamos nada.
+            
+            self.screen.blit(sprite_a_usar, (x - sprite_a_usar.get_width() // 2, y - sprite_a_usar.get_height() // 2))
+
     def _draw_decoraciones(self, ecosistema):
         """Dibuja elementos de decoración como árboles y plantas sobre el fondo estático."""
-        for x, y in ecosistema.terreno["arboles"]:
-            sprite = self.sprites.get("arbol")
-            if sprite: self.background_surface.blit(sprite, (x - sprite.get_width()//2, y - sprite.get_height()//2))
-        for x, y in ecosistema.terreno["plantas"]:
-            sprite = self.sprites.get("planta")
-            if sprite: self.background_surface.blit(sprite, (x - sprite.get_width()//2, y - sprite.get_height()//2))
+        sprite_arbol = self.sprites.get("arbol")
+        if sprite_arbol:
+            for x, y in ecosistema.terreno["arboles"]:
+                self.background_surface.blit(sprite_arbol, (x - sprite_arbol.get_width()//2, y - sprite_arbol.get_height()//2))
+        sprite_planta = self.sprites.get("planta")
+        if sprite_planta:
+            for x, y in ecosistema.terreno["plantas"]:
+                self.background_surface.blit(sprite_planta, (x - sprite_planta.get_width()//2, y - sprite_planta.get_height()//2))
+        sprite_planta_2 = self.sprites.get("planta_2")
+        if sprite_planta_2:
+            for x, y in ecosistema.terreno["plantas_2"]:
+                self.background_surface.blit(sprite_planta_2, (x - sprite_planta_2.get_width()//2, y - sprite_planta_2.get_height()//2))
+
+    def _draw_clouds(self):
+        """Dibuja y actualiza las nubes."""
+        # Combinamos ambas listas de nubes para dibujarlas todas
+        all_clouds = self.top_clouds + self.middle_clouds + self.bottom_clouds
+        for cloud in all_clouds:
+            cloud.update()
+            cloud.image.set_alpha(180) # Hacemos las nubes semitransparentes
+            self.screen.blit(cloud.image, (cloud.x, cloud.y))
 
     def update_hierba_surface(self, ecosistema):
         self.hierba_surface.fill((0, 0, 0, 0))
-        hierba_sprite = self.sprites.get("hierba") if self.sprites else None
-        for gx in range(ecosistema.grid_width):
-            for gy in range(ecosistema.grid_height):
-                valor_hierba = ecosistema.grid_hierba[gx][gy]
-                if valor_hierba > 5:
-                    alpha = min(255, int((valor_hierba / MAX_HIERBA_PRADERA) * 255))
-                    if hierba_sprite:
-                        temp_sprite = hierba_sprite.copy()
-                        temp_sprite.set_alpha(alpha)
-                        self.hierba_surface.blit(temp_sprite, (gx * CELL_SIZE, gy * CELL_SIZE))
+        # La lógica de dibujado de la hierba con sprites ha sido eliminada.
 
     def _draw_recursos(self, ecosistema):
         carcasa_sprite = self.sprites.get("carcasa")
@@ -435,11 +523,13 @@ class PygameView:
 
         self.screen.blit(self.background_surface, (0, 0))
         self._draw_rios(ecosistema)
+        self._draw_puentes(ecosistema)
         self.screen.blit(self.hierba_surface, (0, 0))
         self._draw_recursos(ecosistema)
         
         self._draw_peces(ecosistema)
         self._draw_animales(ecosistema, animal_seleccionado)
+        self._draw_clouds() # Dibujamos las nubes aquí para que se superpongan a todo
         self._draw_pareja_seleccionada(pareja_seleccionada)
         self._draw_ui(ecosistema, animal_seleccionado, pareja_seleccionada, sim_speed)
         

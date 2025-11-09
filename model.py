@@ -10,6 +10,7 @@ CELL_SIZE = 20
 MAX_HIERBA_NORMAL = 70
 BORDE_MARGEN = 20 # Margen de seguridad para que los animales no se acerquen a los bordes
 MAX_HIERBA_PRADERA = 120
+
 class Terreno:
     def __init__(self, rect):
         self.rect = pygame.Rect(rect)
@@ -323,27 +324,21 @@ class Ecosistema:
         self.animales: list[Animal] = []
         self.terreno = {
             "praderas": [
-                Pradera((20, 400, 150, 150)),
-                Pradera((300, 50, 250, 100)),
-                Pradera((50, 50, 100, 150)),
-                Pradera((600, 400, 150, 120)),
-                Pradera((250, 200, 200, 50)),
-                Pradera((20, 560, 180, 120)),
-                Pradera((650, 550, 130, 130))  
+                Pradera((50, 50, 250, 150)),      # Pradera en la esquina superior izquierda
+                Pradera((500, 80, 200, 100)),     # Pradera en la zona superior derecha
+                Pradera((50, 450, 250, 200)),     # Gran pradera en la esquina inferior izquierda
+                Pradera((550, 480, 200, 150)),    # Pradera en la esquina inferior derecha
             ],
             "rios": [],
             "selvas": [
-                Selva((200, 450, 250, 180)),
-                Selva((20, 20, 100, 100)),
-                Selva((500, 250, 150, 100)),
-                Selva((700, 20, 80, 250)),
-                Selva((550, 50, 200, 200)),
-                Selva((20, 200, 120, 150))
+                Selva((350, 500, 150, 100)),      # Pequeña selva en la parte inferior central
             ],
             "montanas": [],
             "santuarios": [],
             "arboles": [],
             "plantas": [],
+            "plantas_2": [],
+            "puentes": []
         }
         self.recursos = {
             "carcasas": []
@@ -351,6 +346,7 @@ class Ecosistema:
         self.grid_width = SIM_WIDTH // CELL_SIZE
         self.grid_height = SCREEN_HEIGHT // CELL_SIZE
         self.grid_hierba = [[0 for _ in range(self.grid_height)] for _ in range(self.grid_width)]
+        self.terrain_grid = [[None for _ in range(self.grid_height)] for _ in range(self.grid_width)]
         self.is_river = [[False for _ in range(self.grid_height)] for _ in range(self.grid_width)]
 
         # Construir ríos nuevos: pool central + brazos hacia esquinas (aproximación con rects)
@@ -374,18 +370,38 @@ class Ecosistema:
         # Añadir a la lista de ríos
         self.terreno["rios"].extend([left_arm, right_arm, top_arm, pool])
 
+        # Añadir puentes en ubicaciones estratégicas sobre los brazos horizontales
+        self.terreno["puentes"].append((150, center_y))
+        self.terreno["puentes"].append((SIM_WIDTH - 150, center_y))
+        self.terreno["puentes"].append((SIM_WIDTH // 4, center_y))
+        self.terreno["puentes"].append((center_x + 2, 150)) # Nuevo puente en el río superior, movido 2px a la derecha
+
+        # Establecer la jerarquía de terrenos (el primero tiene más prioridad)
+        terrain_hierarchy = [
+            ("montanas", "montana"),
+            ("santuarios", "santuario"),
+            ("selvas", "selva"),
+            ("praderas", "pradera")
+        ]
+
         for gx in range(self.grid_width):
             for gy in range(self.grid_height):
                 cell_rect = pygame.Rect(gx * CELL_SIZE, gy * CELL_SIZE, CELL_SIZE, CELL_SIZE)
                 
                 if any(rio.rect.colliderect(cell_rect) for rio in self.terreno["rios"]):
                     self.grid_hierba[gx][gy] = 0
+                    self.terrain_grid[gx][gy] = "rio" # Marcar como río
                     self.is_river[gx][gy] = True
                     continue
 
-                max_val = MAX_HIERBA_NORMAL
-                if any(p.rect.colliderect(cell_rect) for p in self.terreno["praderas"]):
-                    max_val = MAX_HIERBA_PRADERA
+                # Asignar tipo de terreno basado en la jerarquía
+                for terrain_list_name, terrain_type_name in terrain_hierarchy:
+                    if any(t.rect.colliderect(cell_rect) for t in self.terreno[terrain_list_name]):
+                        self.terrain_grid[gx][gy] = terrain_type_name
+                        break
+                
+                # Calcular hierba inicial
+                max_val = MAX_HIERBA_PRADERA if self.terrain_grid[gx][gy] == "pradera" else MAX_HIERBA_NORMAL
                 self.grid_hierba[gx][gy] = random.randint(0, max_val)
 
         self.dia_total = 1
@@ -412,6 +428,9 @@ class Ecosistema:
     def _es_posicion_valida_para_vegetacion(self, x, y, decoraciones_existentes, min_dist):
         if any(rio.rect.collidepoint(x, y) for rio in self.terreno["rios"]):
             return False
+        for px, py in self.terreno["puentes"]:
+            if math.sqrt((x - px)**2 + (y - py)**2) < 40: # Distancia de seguridad alrededor de los puentes
+                return False
         return self._es_posicion_decoracion_valida(x, y, decoraciones_existentes, min_dist)
 
     def _es_posicion_decoracion_valida(self, x, y, decoraciones_existentes, min_dist):
@@ -423,37 +442,70 @@ class Ecosistema:
 
     def _poblar_decoraciones(self):
         self.terreno["arboles"].clear()
-        self.terreno["plantas"].clear()
+        self.terreno["plantas"] = []
+        self.terreno["plantas_2"] = []
         
         decoraciones_todas = []
         intentos_max = 80
-        margen = 5
+        margen = 10
 
+        # Poblar árboles densamente en las selvas
         for selva in self.terreno["selvas"]:
-            for _ in range(35):
+            for _ in range(40): # Número de árboles por selva
                 for _ in range(intentos_max):
                     x = random.randint(selva.rect.left + margen, selva.rect.right - margen)
                     y = random.randint(selva.rect.top + margen, selva.rect.bottom - margen)
-                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=35):
+                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=25):
                         self.terreno["arboles"].append((x, y)); decoraciones_todas.append((x, y))
                         break
 
-        zonas_alimento = self.terreno["praderas"] + self.terreno["selvas"]
-        for zona in zonas_alimento:
-            for _ in range(35):
+        # Poblar algunos árboles en las praderas
+        for pradera in self.terreno["praderas"]:
+            for _ in range(15): # Número de árboles por pradera
                 for _ in range(intentos_max):
-                    x = random.randint(zona.rect.left + margen, zona.rect.right - margen)
-                    y = random.randint(zona.rect.top + margen, zona.rect.bottom - margen)
-                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=20):
-                        self.terreno["plantas"].append((x, y)); decoraciones_todas.append((x, y))
+                    x = random.randint(pradera.rect.left + margen, pradera.rect.right - margen)
+                    y = random.randint(pradera.rect.top + margen, pradera.rect.bottom - margen)
+                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=30):
+                        self.terreno["arboles"].append((x, y)); decoraciones_todas.append((x, y))
                         break
+        
+        # Poblar plantas en grupos sobre el fondo
+        num_grupos_plantas = 15
+        plantas_por_grupo = 10
+        radio_grupo = 40
 
-        for _ in range(120):
+        for _ in range(num_grupos_plantas):
+            # Elegir un centro para el grupo que no esté en un terreno ya definido
             for _ in range(intentos_max):
-                x, y = random.randint(0, SIM_WIDTH), random.randint(0, SCREEN_HEIGHT)
-                if not self.choca_con_terreno(x,y) and self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=20):
-                    self.terreno["plantas"].append((x, y)); decoraciones_todas.append((x, y))
+                centro_x = random.randint(margen, SIM_WIDTH - margen)
+                centro_y = random.randint(margen, SCREEN_HEIGHT - margen)
+                if not self.choca_con_terreno(centro_x, centro_y) and self.terrain_grid[centro_x // CELL_SIZE][centro_y // CELL_SIZE] is None:
                     break
+            
+            for _ in range(plantas_por_grupo):
+                x = centro_x + random.randint(-radio_grupo, radio_grupo)
+                y = centro_y + random.randint(-radio_grupo, radio_grupo)
+                if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=10):
+                    self.terreno["plantas"].append((x, y)); decoraciones_todas.append((x, y))
+        
+        # Poblar plantas_2 en grupos sobre el fondo
+        num_grupos_plantas_2 = 12
+        plantas_por_grupo_2 = 8
+        radio_grupo_2 = 35
+
+        for _ in range(num_grupos_plantas_2):
+            # Elegir un centro para el grupo que no esté en un terreno ya definido
+            for _ in range(intentos_max):
+                centro_x = random.randint(margen, SIM_WIDTH - margen)
+                centro_y = random.randint(margen, SCREEN_HEIGHT - margen)
+                if not self.choca_con_terreno(centro_x, centro_y) and self.terrain_grid[centro_x // CELL_SIZE][centro_y // CELL_SIZE] is None:
+                    break
+            
+            for _ in range(plantas_por_grupo_2):
+                x = centro_x + random.randint(-radio_grupo_2, radio_grupo_2)
+                y = centro_y + random.randint(-radio_grupo_2, radio_grupo_2)
+                if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=10):
+                    self.terreno["plantas_2"].append((x, y)); decoraciones_todas.append((x, y))
 
     def _precalcular_terrenos_cercanos(self):
         print("Pre-calculando caché de terrenos cercanos para optimización...")
