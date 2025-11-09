@@ -109,6 +109,7 @@ class Animal(ABC):
         self.target_y = None
         self.tiempo_deambulando = 0
         self.ecosistema = None
+        self.pareja_objetivo = None
         
         type(self).contador = getattr(type(self), 'contador', 0) + 1
 
@@ -187,6 +188,30 @@ class Animal(ABC):
 
         self.tiempo_deambulando -= 1
 
+    def buscar_comida(self, forzado=False):
+        """Método para iniciar la búsqueda de comida."""
+        # Esta es una implementación básica. Se puede expandir en las subclases.
+        # Por ahora, simplemente cambia el estado para que la lógica en 'actualizar' se active.
+        if forzado:
+            self.estado = "buscando_comida"
+            print(f"{self.nombre} forzado a buscar comida.")
+
+    def buscar_pareja_para_reproducir(self, pareja_potencial):
+        """Método para iniciar el comportamiento de reproducción con una pareja específica."""
+        # Condiciones simplificadas: misma especie y ambos vivos.
+        if self.esta_vivo and pareja_potencial.esta_vivo and type(self) == type(pareja_potencial):
+            print(f"Iniciando reproducción entre {self.nombre} y {pareja_potencial.nombre}.")
+            self.estado = "buscando_pareja"
+            self.pareja_objetivo = pareja_potencial
+            pareja_potencial.estado = "buscando_pareja"
+            pareja_potencial.pareja_objetivo = self
+        else:
+            print(f"No se puede reproducir: {self.nombre} y {pareja_potencial.nombre} no son de la misma especie.")
+
+    def _dar_a_luz(self):
+        print(f"¡{self.nombre} ha dado a luz!")
+        self.ecosistema.agregar_animal(type(self), es_cria=True, pos=(self.x, self.y))
+
     def actualizar(self, ecosistema):
         if not self.esta_vivo:
             return
@@ -195,10 +220,34 @@ class Animal(ABC):
             self.ecosistema = ecosistema
 
         # Lógica de comportamiento principal
-        if self.estado == "deambulando":
+        if self.estado == "buscando_pareja":
+            if self.pareja_objetivo and self.pareja_objetivo.esta_vivo and self.pareja_objetivo.estado == "buscando_pareja":
+                # Moverse hacia la pareja
+                dx = self.pareja_objetivo.x - self._x_float
+                dy = self.pareja_objetivo.y - self._y_float
+                dist = math.sqrt(dx**2 + dy**2)
+
+                if dist < 10: # Umbral de cercanía para reproducirse
+                    # Reproducción instantánea
+                    print(f"¡{self.nombre} y {self.pareja_objetivo.nombre} se han encontrado y reproducido!")
+                    self._dar_a_luz()
+                    # self._energia -= 30 # Coste de energía por reproducirse (eliminado)
+                    
+                    # Ambos vuelven a deambular
+                    self.pareja_objetivo.estado = "deambulando"
+                    self.pareja_objetivo.pareja_objetivo = None
+                    self.estado = "deambulando"
+                    self.pareja_objetivo = None
+                else:
+                    self._x_float += (dx / dist) * self.velocidad
+                    self._y_float += (dy / dist) * self.velocidad
+            else:
+                # La pareja ya no está disponible
+                self.estado = "deambulando"
+                self.pareja_objetivo = None
+        elif self.estado == "deambulando":
             self.deambular()
 
-        # Consumo de energía y sed por existir y moverse
         self._energia -= 0.05 # Coste base por hora
         self._energia = max(0, self._energia)
 
@@ -503,6 +552,9 @@ class Ecosistema:
         for animal in self.animales:
             animal.actualizar(self)
 
+        # Eliminar animales muertos de la simulación
+        self.animales = [animal for animal in self.animales if animal.esta_vivo]
+
         # Actualizar peces en cada río
         for rio in self.terreno["rios"]:
             for pez in rio.peces:
@@ -538,11 +590,22 @@ class Ecosistema:
             intentos += 1
         return random.randint(20, SIM_WIDTH - 20), random.randint(20, SCREEN_HEIGHT - 20) # Fallback
 
-    def agregar_animal(self, tipo_animal, nombre=None, es_rescate=False):
-        if nombre is None:
-            nombre = f"{tipo_animal.__name__} {getattr(tipo_animal, 'contador', 0) + 1}"
-        x, y = self._obtener_posicion_inicial(tipo_animal)
-        nuevo_animal = tipo_animal(nombre, x, y)
+    def agregar_animal(self, tipo_animal, nombre=None, es_cria=False, pos=None):
+        if es_cria:
+            if pos:
+                # La cría aparece cerca de la madre
+                x = pos[0] + random.randint(-10, 10)
+                y = pos[1] + random.randint(-10, 10)
+            else: # Fallback si no se da posición
+                x, y = self._obtener_posicion_inicial(tipo_animal)
+            nombre = f"Cría de {tipo_animal.__name__}"
+            nuevo_animal = tipo_animal(nombre, x, y, edad=-1) # Edad -1 para que en el siguiente ciclo de día se ponga a 0
+        else:
+            if nombre is None:
+                nombre = f"{tipo_animal.__name__} {getattr(tipo_animal, 'contador', 0) + 1}"
+            x, y = self._obtener_posicion_inicial(tipo_animal)
+            nuevo_animal = tipo_animal(nombre, x, y)
+            
         nuevo_animal.ecosistema = self # Asignar referencia al ecosistema
         self.animales.append(nuevo_animal)
 
