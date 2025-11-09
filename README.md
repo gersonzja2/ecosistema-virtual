@@ -1,8 +1,8 @@
 # 💻 Simulador de Ecosistema Virtual 🌿
 
-Este es mi proyecto de un simulador de ecosistema virtual, desarrollado en Python con la librería Pygame.
+Proyecto de un simulador de ecosistema virtual, desarrollado en Python con la librería Pygame.
 
-El objetivo es crear un pequeño mundo digital donde diferentes especies de animales (herbívoros, carnívoros y omnívoros) interactúan entre sí y con su entorno. Los animales nacen, buscan comida, beben agua, huyen de los depredadores, se reproducen y mueren, todo de forma autónoma.
+El objetivo es crear un pequeño mundo digital donde diferentes especies de animales (herbívoros, carnívoros y omnívoros) interactúan entre sí y con su entorno. Los animales nacen, buscan comida, beben agua, huyen de los depredadores, se reproducen y mueren, todo de forma controlada.
 
 ## ✨ Características Principales
 
@@ -13,7 +13,6 @@ El objetivo es crear un pequeño mundo digital donde diferentes especies de anim
   - **Omnívoros:** Cerdo, Mono.
 - **Entorno Dinámico:**
   - **Ciclo Día/Noche y Estaciones:** El paso del tiempo afecta el crecimiento de los recursos y el comportamiento de los animales.
-  - **Clima Variable:** Eventos como sequías pueden impactar la disponibilidad de alimentos.
   - **Terrenos Múltiples:** Praderas con hierba, selvas con bayas y ríos con peces.
 - **Interfaz Gráfica Interactiva:**
   - Visualización en tiempo real de todos los animales y recursos.
@@ -21,7 +20,7 @@ El objetivo es crear un pequeño mundo digital donde diferentes especies de anim
   - Gráfico que muestra la evolución de las poblaciones a lo largo del tiempo.
   - Posibilidad de hacer clic en un animal para ver sus estadísticas detalladas.
 - **Persistencia:** ¡Puedes guardar el estado de tu simulación y cargarlo más tarde para continuar donde lo dejaste!
-- **Música de fondo:** Para hacer la experiencia más amena :)
+- **Música de fondo y sonidos:** Para hacer la experiencia más amena :)
 
 ## ⚙️ Requisitos
 
@@ -63,7 +62,18 @@ Para ejecutar este proyecto, solo necesitas tener Python y Pygame instalados.
 - **Clic en un animal:** Muestra sus detalles en el panel de información.
 - **ESC:** Cierra la aplicación.
 
-## 📝 Posibles Mejoras (TO-DO)
+## 👥 Roles del Equipo
+
+Este proyecto fue desarrollado por un equipo dedicado de estudiantes apasionados por la programación y la biología computacional.
+
+- **Encargado de la logica y el comportamiento animal(Backend):** Responsable de la implementación de la lógica del ecosistema, el modelo de datos y la inteligencia artificial de los animales.
+  - *Encargado: Gerson Zambrana*
+- **Desarrollador de Interfaz de Usuario (Frontend):** A cargo del diseño y la implementación de la interfaz gráfica con Pygame, la visualización de datos, los controles interactivos y la experiencia de usuario.
+  - *Encargada: Hans Mamani*
+- **Control de Calidad de sonido:** Encargado de realizar las pruebas funcionales, identificar y reportar errores, y la implementacion de sonidos y musica de fondo
+  - *Encargado: Juan Ojeda*
+
+## � Posibles Mejoras (TO-DO)
 
 - [ ] **Comportamientos más complejos:** Implementar caza en manada para algunos carnívoros o comportamiento de rebaño para herbívoros.
 - [ ] **Mejorar el terreno:** Añadir terrenos no transitables como montañas o rocas.
