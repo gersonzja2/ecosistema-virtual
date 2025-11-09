@@ -112,7 +112,7 @@ class PygameView:
         try:
             pygame.mixer.init()
         except Exception:
-            print("Aviso: no se pudo inicializar pygame.mixer; la música de fondo no estará disponible.")
+            print("Aviso: No se pudo inicializar pygame.mixer; la música de fondo no estará disponible.")
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         pygame.display.set_caption("Simulador de Ecosistema Virtual")
         self.font_header = pygame.font.SysFont("helvetica", 24, bold=True)
@@ -174,7 +174,7 @@ class PygameView:
             try:
                 sprites[name] = pygame.transform.scale(pygame.image.load(f"assets/{data['file']}"), data['size'])
             except (pygame.error, FileNotFoundError):
-                print(f"ADVERTENCIA: No se pudo cargar el sprite '{data['file']}'. Se usará un marcador de posición si es necesario.")
+                print(f"ADVERTENCIA: No se pudo cargar el sprite '{data['file']}'. Se usará un marcador de posición.")
         
         # Carga especial para el puente para mantener la relación de aspecto
         try:
@@ -201,8 +201,8 @@ class PygameView:
 
 
         if not sprites:
-            print("\n--- ADVERTENCIA GENERAL: No se encontró ningún archivo de sprite en la carpeta 'assets' ---")
-            print("La simulación usará círculos de colores para todos los animales.")
+            print("\n--- ADVERTENCIA GENERAL: No se encontró ningún archivo de sprite en la carpeta 'assets'. ---")
+            print("La simulación usará círculos de colores para representar a los animales.")
         return sprites
 
     def _load_terrain_textures(self):
@@ -218,7 +218,7 @@ class PygameView:
             try:
                 textures[name] = pygame.image.load(f"assets/{filename}").convert()
             except (pygame.error, FileNotFoundError):
-                print(f"Advertencia: No se encontró la textura '{filename}'. Se usará un color sólido.")
+                print(f"Advertencia: No se encontró la textura '{filename}'. Se usará un color sólido en su lugar.")
                 textures[name] = None
         return textures
 
@@ -234,7 +234,7 @@ class PygameView:
             except (pygame.error, FileNotFoundError):
                 break
         if not texturas:
-            print("Advertencia: No se encontraron texturas de agua (ej: assets/fondo_agua0.png). Se usará un color sólido.")
+            print("Advertencia: No se encontraron texturas de agua (ej: 'assets/fondo_agua0.png'). Se usará un color sólido.")
         return texturas
 
     def _create_buttons(self):
@@ -268,9 +268,11 @@ class PygameView:
         buttons["restart"] = Button(SIM_WIDTH + 10 + 2 * (btn_width_small + spacing), SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Reiniciar", (200, 50, 50), COLOR_TEXT)
         music_text = "Música: ON" if getattr(self, 'music_playing', False) else "Música: OFF"
         buttons["music"] = Button(SIM_WIDTH + 10 + 3 * (btn_width_small + spacing), SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, music_text, (80, 80, 80), COLOR_TEXT)
-        
+
         # Botones contextuales (se dibujarán por separado)
         buttons["force_reproduce"] = Button(SIM_WIDTH + 15, 200, 180, 30, "Forzar Reproducción", (142, 68, 173), COLOR_TEXT)
+        hunt_text = "Cazar Herbívoros"
+        buttons["hunt"] = Button(SIM_WIDTH + 205, 65, 180, 30, hunt_text, (192, 57, 43), COLOR_TEXT)
         buttons["feed_herbivores"] = Button(SIM_WIDTH + 15, 65, 180, 30, "Alimentar Herbívoros", (211, 84, 0), COLOR_TEXT)
 
         return buttons
@@ -366,7 +368,7 @@ class PygameView:
         self._draw_text(f"Clima: {ecosistema.clima_actual}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
         
         y_offset = 105 # Aumentamos el offset para dejar espacio al nuevo botón
-        self._draw_text("--- INFO ---", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
+        self._draw_text("--- INFO GENERAL ---", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
         y_offset += 25
         if animal_seleccionado:
             info = [
@@ -534,7 +536,7 @@ class PygameView:
         # Dibujar botones no contextuales
         for name, button in self.buttons.items():
             # El botón de reproducción se dibuja condicionalmente en _draw_ui
-            if name == "force_reproduce":
+            if name == "force_reproduce" and not animal_seleccionado:
                 continue
             # El resto de botones se dibujan siempre
             button.draw(self.screen)
@@ -644,7 +646,8 @@ class SimulationController:
             "next_day": self._action_advance_day,
             "restart": self._action_restart,
             "feed_herbivores": self._action_feed_all_herbivores,
-            "force_reproduce": self._action_force_reproduce
+            "force_reproduce": self._action_force_reproduce,
+            "hunt": self._action_toggle_hunt_mode
         }
         
         for name, cls in animal_map.items():
@@ -653,7 +656,7 @@ class SimulationController:
     def _action_save(self): self.ecosistema.guardar_estado()
     def _action_load(self):
         try: self.ecosistema.cargar_estado(); self.view.graph.history = []; self.view.update_hierba_surface(self.ecosistema); self.view.needs_static_redraw = True
-        except FileNotFoundError: print("¡No se encontró guardado!")
+        except FileNotFoundError: print("¡No se encontró ningún archivo de guardado!")
 
     def _action_restart(self):
         print("Reiniciando simulación...")
@@ -677,6 +680,15 @@ class SimulationController:
         for animal in self.ecosistema.animales:
             if not isinstance(animal, Carnivoro) and (animal.energia / animal.max_energia) < 0.8:
                 animal.buscar_comida(forzado=True)
+
+    def _action_toggle_hunt_mode(self):
+        """Activa o desactiva el modo de caza para carnívoros."""
+        self.ecosistema.activar_modo_caza_carnivoro()
+        # Actualizar texto del botón
+        if self.ecosistema.modo_caza_carnivoro_activo:
+            self.view.buttons["hunt"].text = "Regresar Carnívoros"
+        else:
+            self.view.buttons["hunt"].text = "Cazar Herbívoros"
 
     def _action_force_reproduce(self):
         if self.animal_seleccionado and self.pareja_seleccionada:
@@ -729,7 +741,7 @@ class SimulationController:
                 active_buttons = list(self.button_actions.keys())
                 # El botón de reproducción solo está activo si hay un animal seleccionado
                 if not self.animal_seleccionado:
-                    active_buttons.remove("force_reproduce")
+                    if "force_reproduce" in active_buttons: active_buttons.remove("force_reproduce")
                 
                 clicked_button_name = self.get_clicked_button(pos, active_buttons)
                 if clicked_button_name:
@@ -759,7 +771,7 @@ class SimulationController:
             
             if not animal_clicado:
                 # Si se hace clic en espacio vacío, se deselecciona todo.
-                self.animal_seleccionado = None
+                self.animal_seleccionado = None # CORRECCIÓN: Limpiar también la pareja.
                 self.pareja_seleccionada = None
             elif not self.animal_seleccionado or self.animal_seleccionado == animal_clicado:
                 self.animal_seleccionado = animal_clicado

@@ -103,6 +103,9 @@ class Animal(ABC):
         self.tiempo_deambulando = 0
         self.ecosistema = None
         self.pareja_objetivo = None
+        self.objetivo_puente = None
+        self.puente_cruzado = None # Para recordar qué puente usó para cazar
+        self.modo_caza_activado = False
         
         self.objetivo_comida = None # Puede ser un río, una carcasa, etc.
         type(self).contador = getattr(type(self), 'contador', 0) + 1
@@ -145,7 +148,7 @@ class Animal(ABC):
         rio_borde_der = center_x + thickness // 2
         rio_borde_sup = center_y - thickness // 2
 
-        if isinstance(self, Carnivoro):
+        if isinstance(self, Carnivoro) and not self.modo_caza_activado:
             # Cuadrante superior izquierdo
             return (BORDE_MARGEN, BORDE_MARGEN, rio_borde_izq - BORDE_MARGEN * 2, rio_borde_sup - BORDE_MARGEN * 2)
         elif isinstance(self, Herbivoro):
@@ -283,6 +286,70 @@ class Animal(ABC):
                     self._x_float += (dx / dist) * self.velocidad
                     self._y_float += (dy / dist) * self.velocidad
 
+        elif self.estado == "yendo_a_cazar":
+            if self.objetivo_puente:
+                px, py = self.objetivo_puente
+                dx, dy = px - self._x_float, py - self._y_float
+                dist = math.sqrt(dx**2 + dy**2)
+                if dist < 10:
+                    # Ha llegado al puente, ahora puede empezar a cazar
+                    self.estado = "deambulando"
+                    self.puente_cruzado = self.objetivo_puente # Recuerda el puente que cruzó
+                    self.objetivo_puente = None
+                else:
+                    self._x_float += (dx / dist) * self.velocidad
+                    self._y_float += (dy / dist) * self.velocidad
+            else: # No se asignó puente, volver a deambular
+                self.estado = "deambulando"
+
+        elif self.estado == "regresando_de_cazar":
+            if self.objetivo_puente:
+                px, py = self.objetivo_puente
+                dx, dy = px - self._x_float, py - self._y_float
+                dist = math.sqrt(dx**2 + dy**2)
+                if dist < 10:
+                    # Ha llegado al puente, ahora puede regresar a su zona
+                    self.estado = "regresando_a_zona"
+                    self.puente_cruzado = None # Olvida el puente al regresar a su lado
+                    self.objetivo_puente = None
+                else:
+                    self._x_float += (dx / dist) * self.velocidad
+                    self._y_float += (dy / dist) * self.velocidad
+            else: # No se asignó puente, simplemente intentar regresar a la zona
+                self.estado = "regresando_a_zona"
+        
+        elif self.estado == "cazando_herbivoro":
+            if self.objetivo_comida and self.objetivo_comida.esta_vivo:
+                # Moverse hacia la presa
+                dx = self.objetivo_comida.x - self._x_float
+                dy = self.objetivo_comida.y - self._y_float
+                dist = math.sqrt(dx**2 + dy**2)
+
+                if dist < 10: # Si está cerca, ataca
+                    print(f"¡{self.nombre} ha cazado a {self.objetivo_comida.nombre}!")
+                    # La presa pierde energía, el cazador gana
+                    energia_ganada = self.objetivo_comida.energia * 0.8
+                    self.objetivo_comida._energia = 0 # La presa muere
+                    self._energia = min(self.max_energia, self._energia + energia_ganada)
+                    
+                    # Vuelve a deambular (en la zona de caza)
+                    self.estado = "deambulando"
+                    self.objetivo_comida = None
+                else:
+                    self._x_float += (dx / dist) * self.velocidad
+                    self._y_float += (dy / dist) * self.velocidad
+            else: # La presa murió o desapareció, buscar otra o deambular
+                self.estado = "deambulando"
+                self.objetivo_comida = None
+
+        elif self.estado == "regresando_a_zona":
+            zona_x, zona_y, zona_w, zona_h = self._obtener_zona_deambulacion()
+            if zona_x <= self.x < zona_x + zona_w and zona_y <= self.y < zona_y + zona_h:
+                # Ya está en su zona, vuelve a deambular normal
+                self.estado = "deambulando"
+            else:
+                self.deambular() # Usa deambular para moverse hacia su zona
+
         elif self.estado == "deambulando":
             self.deambular()
 
@@ -297,18 +364,35 @@ class Herbivoro(Animal):
 
 class Carnivoro(Animal):
     def actualizar(self, ecosistema):
-        # Lógica de decisión específica para carnívoros
-        if self.estado == "deambulando" and self.energia < self.max_energia * 0.5:
-            # Buscar comida si la energía es baja
-            grid_x, grid_y = self.x // CELL_SIZE, self.y // CELL_SIZE
-            if (grid_x, grid_y) in ecosistema.terrain_cache["rio"]:
-                rio_cercano = ecosistema.terrain_cache["rio"][(grid_x, grid_y)]
-                if rio_cercano and rio_cercano.peces:
-                    print(f"{self.nombre} tiene hambre y va a cazar peces al río.")
-                    self.estado = "cazando_pez"
-                    self.objetivo_comida = rio_cercano
-                    # No llamar a super().actualizar() aquí para que el estado de caza se procese en el siguiente tick
-                    return
+        # Lógica de decisión para carnívoros
+        if self.estado == "deambulando":
+            if self.modo_caza_activado and self.energia < self.max_energia * 0.8:
+                # Modo caza activado: buscar herbívoros cercanos
+                presas_cercanas = [
+                    animal for animal in ecosistema.obtener_animales_cercanos(self.x, self.y, radio=15)
+                    if isinstance(animal, Herbivoro)
+                ]
+                if presas_cercanas:
+                    presa_elegida = random.choice(presas_cercanas)
+                    print(f"{self.nombre} ha detectado a {presa_elegida.nombre} y va a cazarlo.")
+                    self.estado = "cazando_herbivoro"
+                    self.objetivo_comida = presa_elegida
+                    super().actualizar(ecosistema) # Llama a la lógica de persecución
+                    return 
+
+            elif not self.modo_caza_activado and self.energia < self.max_energia * 0.5:
+                # Modo caza desactivado: buscar peces si tiene hambre
+                grid_x, grid_y = self.x // CELL_SIZE, self.y // CELL_SIZE
+                if (grid_x, grid_y) in ecosistema.terrain_cache["rio"]:
+                    rio_cercano = ecosistema.terrain_cache["rio"][(grid_x, grid_y)]
+                    if rio_cercano and any(not p.fue_comido for p in rio_cercano.peces):
+                        print(f"{self.nombre} tiene hambre y va a cazar peces al río.")
+                        self.estado = "cazando_pez"
+                        self.objetivo_comida = rio_cercano
+                        super().actualizar(ecosistema)
+                        return
+
+
 
         # Si no se tomó una decisión especial, ejecutar la lógica normal de Animal
         super().actualizar(ecosistema)
@@ -464,6 +548,7 @@ class Ecosistema:
         self.hierba_cambio = False # Flag para optimización de renderizado
 
         self.grid_animales = {}
+        self.modo_caza_carnivoro_activo = False
         self._poblar_decoraciones()
         self.terrain_cache = {"rio": {}, "selva": {}}
         self._precalcular_terrenos_cercanos()
@@ -560,7 +645,7 @@ class Ecosistema:
                     self.terreno["plantas_2"].append((x, y)); decoraciones_todas.append((x, y))
 
     def _precalcular_terrenos_cercanos(self):
-        print("Pre-calculando caché de terrenos cercanos para optimización...")
+        print("Precalculando caché de terrenos cercanos para optimización...")
         for gx in range(self.grid_width):
             for gy in range(self.grid_height):
                 x, y = gx * CELL_SIZE, gy * CELL_SIZE
@@ -715,6 +800,36 @@ class Ecosistema:
             
         nuevo_animal.ecosistema = self # Asignar referencia al ecosistema
         self.animales.append(nuevo_animal)
+
+    def activar_modo_caza_carnivoro(self):
+        self.modo_caza_carnivoro_activo = not self.modo_caza_carnivoro_activo
+        for animal in self.animales:
+            if isinstance(animal, Carnivoro):
+                animal.modo_caza_activado = self.modo_caza_carnivoro_activo
+                
+                if self.modo_caza_carnivoro_activo:
+                    # Encontrar el puente más cercano para cruzar
+                    puentes_caza = [p for p in self.terreno["puentes"] if p[1] > 300] # Puentes horizontales
+                    if not puentes_caza:
+                        animal.objetivo_puente = None
+                    else:
+                        puente_cercano = min(puentes_caza, key=lambda p: (animal.x - p[0])**2 + (animal.y - p[1])**2)
+                        animal.objetivo_puente = puente_cercano
+
+                    print(f"{animal.nombre} entra en modo caza y se dirige a la zona de herbívoros.")
+                    if animal.objetivo_puente:
+                        animal.estado = "yendo_a_cazar"
+                    else: # Si no hay puentes, deambula como antes
+                        animal.estado = "deambulando"
+                else:
+                    print(f"{animal.nombre} sale del modo caza y regresa a su territorio.")
+                    # Usar el puente que cruzó para regresar, si lo recuerda
+                    animal.objetivo_puente = animal.puente_cruzado
+                    if animal.objetivo_puente:
+                        animal.estado = "regresando_de_cazar"
+                    else:
+                        animal.estado = "regresando_a_zona"
+                    animal.objetivo_comida = None # Cancela cualquier caza actual
 
     def guardar_estado(self, archivo="save_state.json"):
         estado = {
