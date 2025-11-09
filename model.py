@@ -91,7 +91,6 @@ class Animal(ABC):
         self._x_float = float(x)
         self._y_float = float(y)
         self._edad = max(0, edad)
-        self._sed = 0
         if max_energia is None:
             max_energia = max(80, min(120, 100 + random.randint(-10, 10)))
         self.max_energia = max_energia
@@ -255,7 +254,6 @@ class Animal(ABC):
                         ecosistema.grid_hierba[grid_x][grid_y] -= 10
                         self._energia = min(self.max_energia, self._energia + 15)
                         print(f"{self.nombre} ha comido hierba.")
-                        ecosistema.hierba_cambio = True
                     else:
                         print(f"{self.nombre} intentó comer, pero no hay suficiente hierba aquí.")
                 else:
@@ -545,7 +543,6 @@ class Ecosistema:
         self.clima_actual = "Normal"
         self.factor_crecimiento_base = 1.5 # Factor de crecimiento constante
         self.animales_nuevos = []
-        self.hierba_cambio = False # Flag para optimización de renderizado
 
         self.grid_animales = {}
         self.modo_caza_carnivoro_activo = False
@@ -725,7 +722,6 @@ class Ecosistema:
                     crecimiento_real = int(tasa_crecimiento_base * factor_crecimiento * (1 - self.grid_hierba[gx][gy] / max_capacidad))
                     self.grid_hierba[gx][gy] += crecimiento_real
                     self.grid_hierba[gx][gy] = min(self.grid_hierba[gx][gy], max_capacidad)
-            self.hierba_cambio = True # La hierba creció, necesita redibujarse
             
             for selva in self.terreno["selvas"]: selva.crecer_recursos(factor_crecimiento)
             for rio in self.terreno["rios"]: rio.crecer_recursos(factor_crecimiento)
@@ -841,7 +837,7 @@ class Ecosistema:
                 {
                     "tipo": a.__class__.__name__,
                     "nombre": a.nombre, "x": a.x, "y": a.y, "edad": a.edad,
-                    "energia": a.energia, "sed": a._sed, "max_energia": a.max_energia
+                    "energia": a.energia, "max_energia": a.max_energia
                 }
                 for a in self.animales
             ]
@@ -875,5 +871,4 @@ class Ecosistema:
                 animal = tipo_clase(a_data["nombre"], a_data["x"], a_data["y"], 
                                     a_data.get("edad", 0), a_data.get("energia", 100), 
                                     max_energia=a_data.get("max_energia", max_energia_default))
-                animal._sed = a_data.get("sed", 0)
                 self.animales.append(animal)

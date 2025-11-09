@@ -485,10 +485,6 @@ class PygameView:
             cloud.image.set_alpha(180) # Hacemos las nubes semitransparentes
             self.screen.blit(cloud.image, (cloud.x, cloud.y))
 
-    def update_hierba_surface(self, ecosistema):
-        self.hierba_surface.fill((0, 0, 0, 0))
-        # La lógica de dibujado de la hierba con sprites ha sido eliminada.
-
     def _draw_recursos(self, ecosistema):
         carcasa_sprite = self.sprites.get("carcasa")
         for carcasa in ecosistema.recursos["carcasas"]:
@@ -609,7 +605,6 @@ class SimulationController:
                 return True
         
         self._actualizar_grafico()
-        self.view.update_hierba_surface(self.ecosistema)
         return self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales
     
     def _actualizar_grafico(self):
@@ -622,9 +617,6 @@ class SimulationController:
 
     def _avanzar_hora(self):
         self.ecosistema.simular_hora()
-        if self.ecosistema.hierba_cambio:
-            self.view.update_hierba_surface(self.ecosistema)
-            self.ecosistema.hierba_cambio = False
         if self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales:
             return True
         if self.ecosistema.hora_actual == 0:
@@ -655,7 +647,7 @@ class SimulationController:
         
     def _action_save(self): self.ecosistema.guardar_estado()
     def _action_load(self):
-        try: self.ecosistema.cargar_estado(); self.view.graph.history = []; self.view.update_hierba_surface(self.ecosistema); self.view.needs_static_redraw = True
+        try: self.ecosistema.cargar_estado(); self.view.graph.history = []; self.view.needs_static_redraw = True
         except FileNotFoundError: print("¡No se encontró ningún archivo de guardado!")
 
     def _action_restart(self):
@@ -665,7 +657,6 @@ class SimulationController:
         self.view.graph.history.clear()
         self.animal_seleccionado = None
         self.pareja_seleccionada = None
-        self.view.update_hierba_surface(self.ecosistema)
         self.view.needs_static_redraw = True
         self.paused = True
     def _action_toggle_pause(self): self.paused = not self.paused
@@ -701,7 +692,6 @@ class SimulationController:
 
     def run(self):
         self._poblar_ecosistema()
-        self.view.update_hierba_surface(self.ecosistema)
         
         running = True
         sim_over = False
