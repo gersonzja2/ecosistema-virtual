@@ -69,14 +69,6 @@ class Rio(Terreno):
                 y = random.randint(self.rect.top + 5, self.rect.bottom - 5)
                 self.peces.append(Pez(x, y, self))
 
-    def actualizar(self):
-        self.peces = [pez for pez in self.peces if not pez.fue_comido]
-        
-        if len(self.peces) < self.max_peces and random.random() < 0.1:
-            x = random.randint(self.rect.left + 5, self.rect.right - 5)
-            y = random.randint(self.rect.top + 5, self.rect.bottom - 5)
-            self.peces.append(Pez(x, y, self))
-
 class Selva(Terreno):
     def __init__(self, rect):
         super().__init__(rect)
@@ -112,6 +104,7 @@ class Animal(ABC):
         self.ecosistema = None
         self.pareja_objetivo = None
         
+        self.objetivo_comida = None # Puede ser un río, una carcasa, etc.
         type(self).contador = getattr(type(self), 'contador', 0) + 1
 
     @property
@@ -247,6 +240,49 @@ class Animal(ABC):
                 # La pareja ya no está disponible
                 self.estado = "deambulando"
                 self.pareja_objetivo = None
+        elif self.estado == "buscando_comida":
+            # Lógica para comer hierba si no es carnívoro
+            if not isinstance(self, Carnivoro):
+                grid_x = self.x // CELL_SIZE
+                grid_y = self.y // CELL_SIZE
+                
+                # Asegurarse de que las coordenadas están dentro de los límites del grid
+                if 0 <= grid_x < ecosistema.grid_width and 0 <= grid_y < ecosistema.grid_height:
+                    if ecosistema.grid_hierba[grid_x][grid_y] > 10:
+                        ecosistema.grid_hierba[grid_x][grid_y] -= 10
+                        self._energia = min(self.max_energia, self._energia + 15)
+                        print(f"{self.nombre} ha comido hierba.")
+                        ecosistema.hierba_cambio = True
+                    else:
+                        print(f"{self.nombre} intentó comer, pero no hay suficiente hierba aquí.")
+                else:
+                    print(f"{self.nombre} está fuera de los límites del grid para comer.")
+            
+            # Después de intentar comer (o si es carnívoro), vuelve a deambular
+            self.estado = "deambulando"
+        elif self.estado == "cazando_pez":
+            if self.objetivo_comida and isinstance(self.objetivo_comida, Rio):
+                rio = self.objetivo_comida
+                # Moverse hacia el borde del río
+                target_x, target_y = rio.rect.centerx, rio.rect.centery # Simplificación: ir al centro
+                dx, dy = target_x - self._x_float, target_y - self._y_float
+                dist = math.sqrt(dx**2 + dy**2)
+
+                if dist < 40: # Si está cerca del río
+                    # Buscar un pez en el río
+                    pez_cercano = next((p for p in rio.peces if not p.fue_comido and math.sqrt((self.x - p.x)**2 + (self.y - p.y)**2) < 50), None)
+                    if pez_cercano:
+                        print(f"{self.nombre} ha cazado un pez!")
+                        pez_cercano.fue_comido = True
+                        self._energia = min(self.max_energia, self._energia + pez_cercano.energia)
+                        self.estado = "deambulando"
+                        self.objetivo_comida = None
+                    else: # No hay peces cerca, vuelve a deambular
+                        self.estado = "deambulando"
+                else: # Moverse hacia el río
+                    self._x_float += (dx / dist) * self.velocidad
+                    self._y_float += (dy / dist) * self.velocidad
+
         elif self.estado == "deambulando":
             self.deambular()
 
@@ -260,7 +296,22 @@ class Herbivoro(Animal):
     pass
 
 class Carnivoro(Animal):
-    pass
+    def actualizar(self, ecosistema):
+        # Lógica de decisión específica para carnívoros
+        if self.estado == "deambulando" and self.energia < self.max_energia * 0.5:
+            # Buscar comida si la energía es baja
+            grid_x, grid_y = self.x // CELL_SIZE, self.y // CELL_SIZE
+            if (grid_x, grid_y) in ecosistema.terrain_cache["rio"]:
+                rio_cercano = ecosistema.terrain_cache["rio"][(grid_x, grid_y)]
+                if rio_cercano and rio_cercano.peces:
+                    print(f"{self.nombre} tiene hambre y va a cazar peces al río.")
+                    self.estado = "cazando_pez"
+                    self.objetivo_comida = rio_cercano
+                    # No llamar a super().actualizar() aquí para que el estado de caza se procese en el siguiente tick
+                    return
+
+        # Si no se tomó una decisión especial, ejecutar la lógica normal de Animal
+        super().actualizar(ecosistema)
 
 class Omnivoro(Animal):
     pass

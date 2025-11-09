@@ -270,9 +270,8 @@ class PygameView:
         buttons["music"] = Button(SIM_WIDTH + 10 + 3 * (btn_width_small + spacing), SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, music_text, (80, 80, 80), COLOR_TEXT)
         
         # Botones contextuales (se dibujarán por separado)
-        info_panel_y = 200
-        buttons["force_eat"] = Button(SIM_WIDTH + 15, info_panel_y, 180, 30, "Forzar Comer", (211, 84, 0), COLOR_TEXT)
-        buttons["force_reproduce"] = Button(SIM_WIDTH + 205, info_panel_y, 180, 30, "Forzar Reproducción", (142, 68, 173), COLOR_TEXT)
+        buttons["force_reproduce"] = Button(SIM_WIDTH + 15, 200, 180, 30, "Forzar Reproducción", (142, 68, 173), COLOR_TEXT)
+        buttons["feed_herbivores"] = Button(SIM_WIDTH + 15, 65, 180, 30, "Alimentar Herbívoros", (211, 84, 0), COLOR_TEXT)
 
         return buttons
 
@@ -366,7 +365,7 @@ class PygameView:
         y_offset = 40
         self._draw_text(f"Clima: {ecosistema.clima_actual}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
         
-        y_offset = 80
+        y_offset = 105 # Aumentamos el offset para dejar espacio al nuevo botón
         self._draw_text("--- INFO ---", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
         y_offset += 25
         if animal_seleccionado:
@@ -381,8 +380,7 @@ class PygameView:
                 self._draw_text(line, self.font_small, COLOR_TEXT, self.screen, ui_x, y_offset)
                 y_offset += 15
             
-            # Dibujar botones contextuales si hay un animal seleccionado
-            self.buttons["force_eat"].draw(self.screen)
+            # Dibujar botón de reproducción si hay un animal seleccionado
             self.buttons["force_reproduce"].draw(self.screen)
         else:
             herb_count = sum(1 for a in ecosistema.animales if isinstance(a, Herbivoro))
@@ -523,11 +521,11 @@ class PygameView:
 
         self.screen.blit(self.background_surface, (0, 0))
         self._draw_rios(ecosistema)
+        self._draw_peces(ecosistema) # Dibujar peces sobre el agua
         self._draw_puentes(ecosistema)
         self.screen.blit(self.hierba_surface, (0, 0))
         self._draw_recursos(ecosistema)
         
-        self._draw_peces(ecosistema)
         self._draw_animales(ecosistema, animal_seleccionado)
         self._draw_clouds() # Dibujamos las nubes aquí para que se superpongan a todo
         self._draw_pareja_seleccionada(pareja_seleccionada)
@@ -535,9 +533,10 @@ class PygameView:
         
         # Dibujar botones no contextuales
         for name, button in self.buttons.items():
-            # No dibujar los botones contextuales aquí, ya se hace en _draw_ui
-            if name in ["force_eat", "force_reproduce"]:
+            # El botón de reproducción se dibuja condicionalmente en _draw_ui
+            if name == "force_reproduce":
                 continue
+            # El resto de botones se dibujan siempre
             button.draw(self.screen)
 
         self._draw_text("ESC para salir", self.font_small, COLOR_TEXT, self.screen, 10, SCREEN_HEIGHT - 25)
@@ -644,7 +643,7 @@ class SimulationController:
             "pause_resume": self._action_toggle_pause,
             "next_day": self._action_advance_day,
             "restart": self._action_restart,
-            "force_eat": self._action_force_eat,
+            "feed_herbivores": self._action_feed_all_herbivores,
             "force_reproduce": self._action_force_reproduce
         }
         
@@ -672,9 +671,12 @@ class SimulationController:
             return self._avanzar_dia()
         return True
     
-    def _action_force_eat(self):
-        if self.animal_seleccionado:
-            self.animal_seleccionado.buscar_comida(forzado=True)
+    def _action_feed_all_herbivores(self):
+        """Da la orden de comer a todos los herbívoros y omnívoros con baja energía."""
+        print("Dando orden de comer a herbívoros y omnívoros hambrientos...")
+        for animal in self.ecosistema.animales:
+            if not isinstance(animal, Carnivoro) and (animal.energia / animal.max_energia) < 0.8:
+                animal.buscar_comida(forzado=True)
 
     def _action_force_reproduce(self):
         if self.animal_seleccionado and self.pareja_seleccionada:
@@ -723,12 +725,12 @@ class SimulationController:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and not sim_over:
                 pos = pygame.mouse.get_pos()
                 
-                # Determinar qué botones están activos para la comprobación de clics
-                active_buttons = [name for name, btn in self.view.buttons.items() if name not in ["force_eat", "force_reproduce"]]
-                if self.animal_seleccionado:
-                    active_buttons.append("force_eat")
-                    active_buttons.append("force_reproduce")
-
+                # Construir la lista de botones que se pueden clickear
+                active_buttons = list(self.button_actions.keys())
+                # El botón de reproducción solo está activo si hay un animal seleccionado
+                if not self.animal_seleccionado:
+                    active_buttons.remove("force_reproduce")
+                
                 clicked_button_name = self.get_clicked_button(pos, active_buttons)
                 if clicked_button_name:
                     action = self.button_actions.get(clicked_button_name)
