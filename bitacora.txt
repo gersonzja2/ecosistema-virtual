@@ -19,3 +19,4 @@ registro de avances par ecocistema virtual
 
 09-11-2025
 - se mejora la implementación de nubes en el juego
+- mejoras en el apartado visual del juego y en la implementación de plantas arboles

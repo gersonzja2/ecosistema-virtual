@@ -201,6 +201,7 @@ class Ecosistema:
             "santuarios": [],
             "arboles": [],
             "plantas": [],
+            "plantas_2": [],
             "puentes": []
         }
         self.recursos = {
@@ -291,6 +292,9 @@ class Ecosistema:
     def _es_posicion_valida_para_vegetacion(self, x, y, decoraciones_existentes, min_dist):
         if any(rio.rect.collidepoint(x, y) for rio in self.terreno["rios"]):
             return False
+        for px, py in self.terreno["puentes"]:
+            if math.sqrt((x - px)**2 + (y - py)**2) < 40: # Distancia de seguridad alrededor de los puentes
+                return False
         return self._es_posicion_decoracion_valida(x, y, decoraciones_existentes, min_dist)
 
     def _es_posicion_decoracion_valida(self, x, y, decoraciones_existentes, min_dist):
@@ -302,37 +306,70 @@ class Ecosistema:
 
     def _poblar_decoraciones(self):
         self.terreno["arboles"].clear()
-        self.terreno["plantas"].clear()
+        self.terreno["plantas"] = []
+        self.terreno["plantas_2"] = []
         
         decoraciones_todas = []
         intentos_max = 80
-        margen = 5
+        margen = 10
 
+        # Poblar árboles densamente en las selvas
         for selva in self.terreno["selvas"]:
-            for _ in range(35):
+            for _ in range(40): # Número de árboles por selva
                 for _ in range(intentos_max):
                     x = random.randint(selva.rect.left + margen, selva.rect.right - margen)
                     y = random.randint(selva.rect.top + margen, selva.rect.bottom - margen)
-                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=35):
+                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=25):
                         self.terreno["arboles"].append((x, y)); decoraciones_todas.append((x, y))
                         break
 
-        zonas_alimento = self.terreno["praderas"] + self.terreno["selvas"]
-        for zona in zonas_alimento:
-            for _ in range(35):
+        # Poblar algunos árboles en las praderas
+        for pradera in self.terreno["praderas"]:
+            for _ in range(15): # Número de árboles por pradera
                 for _ in range(intentos_max):
-                    x = random.randint(zona.rect.left + margen, zona.rect.right - margen)
-                    y = random.randint(zona.rect.top + margen, zona.rect.bottom - margen)
-                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=20):
-                        self.terreno["plantas"].append((x, y)); decoraciones_todas.append((x, y))
+                    x = random.randint(pradera.rect.left + margen, pradera.rect.right - margen)
+                    y = random.randint(pradera.rect.top + margen, pradera.rect.bottom - margen)
+                    if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=30):
+                        self.terreno["arboles"].append((x, y)); decoraciones_todas.append((x, y))
                         break
+        
+        # Poblar plantas en grupos sobre el fondo
+        num_grupos_plantas = 15
+        plantas_por_grupo = 10
+        radio_grupo = 40
 
-        for _ in range(120):
+        for _ in range(num_grupos_plantas):
+            # Elegir un centro para el grupo que no esté en un terreno ya definido
             for _ in range(intentos_max):
-                x, y = random.randint(0, SIM_WIDTH), random.randint(0, SCREEN_HEIGHT)
-                if not self.choca_con_terreno(x,y) and self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=20):
-                    self.terreno["plantas"].append((x, y)); decoraciones_todas.append((x, y))
+                centro_x = random.randint(margen, SIM_WIDTH - margen)
+                centro_y = random.randint(margen, SCREEN_HEIGHT - margen)
+                if not self.choca_con_terreno(centro_x, centro_y) and self.terrain_grid[centro_x // CELL_SIZE][centro_y // CELL_SIZE] is None:
                     break
+            
+            for _ in range(plantas_por_grupo):
+                x = centro_x + random.randint(-radio_grupo, radio_grupo)
+                y = centro_y + random.randint(-radio_grupo, radio_grupo)
+                if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=10):
+                    self.terreno["plantas"].append((x, y)); decoraciones_todas.append((x, y))
+        
+        # Poblar plantas_2 en grupos sobre el fondo
+        num_grupos_plantas_2 = 12
+        plantas_por_grupo_2 = 8
+        radio_grupo_2 = 35
+
+        for _ in range(num_grupos_plantas_2):
+            # Elegir un centro para el grupo que no esté en un terreno ya definido
+            for _ in range(intentos_max):
+                centro_x = random.randint(margen, SIM_WIDTH - margen)
+                centro_y = random.randint(margen, SCREEN_HEIGHT - margen)
+                if not self.choca_con_terreno(centro_x, centro_y) and self.terrain_grid[centro_x // CELL_SIZE][centro_y // CELL_SIZE] is None:
+                    break
+            
+            for _ in range(plantas_por_grupo_2):
+                x = centro_x + random.randint(-radio_grupo_2, radio_grupo_2)
+                y = centro_y + random.randint(-radio_grupo_2, radio_grupo_2)
+                if self._es_posicion_valida_para_vegetacion(x, y, decoraciones_todas, min_dist=10):
+                    self.terreno["plantas_2"].append((x, y)); decoraciones_todas.append((x, y))
 
     def _precalcular_terrenos_cercanos(self):
         print("Pre-calculando caché de terrenos cercanos para optimización...")

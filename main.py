@@ -164,9 +164,9 @@ class PygameView:
             "Halcon": {"file": "halcon.png", "size": (15, 15)},
             "Insecto": {"file": "insecto.png", "size": (8, 8)},
             "Pez": {"file": "pez.png", "size": (10, 10)},
-            "arbol": {"file": "arbol_medium.png", "size": (30, 30)},
-            "planta": {"file": "planta_small.png", "size": (12, 12)},
-            "hierba": {"file": "hierba.png", "size": (20, 20)},
+            "arbol": {"file": "arbol_1.png", "size": (30, 50)},
+            "planta": {"file": "plantas_1.png", "size": (30, 30)},
+            "planta_2": {"file": "plantas_2.png", "size": (30, 30)},
             "nube": {"file": "texturas_nubes.png", "size": (120, 60)}
         }
         for name, data in sprite_definitions.items():
@@ -446,12 +446,18 @@ class PygameView:
 
     def _draw_decoraciones(self, ecosistema):
         """Dibuja elementos de decoración como árboles y plantas sobre el fondo estático."""
-        for x, y in ecosistema.terreno["arboles"]:
-            sprite = self.sprites.get("arbol")
-            if sprite: self.background_surface.blit(sprite, (x - sprite.get_width()//2, y - sprite.get_height()//2))
-        for x, y in ecosistema.terreno["plantas"]:
-            sprite = self.sprites.get("planta")
-            if sprite: self.background_surface.blit(sprite, (x - sprite.get_width()//2, y - sprite.get_height()//2))
+        sprite_arbol = self.sprites.get("arbol")
+        if sprite_arbol:
+            for x, y in ecosistema.terreno["arboles"]:
+                self.background_surface.blit(sprite_arbol, (x - sprite_arbol.get_width()//2, y - sprite_arbol.get_height()//2))
+        sprite_planta = self.sprites.get("planta")
+        if sprite_planta:
+            for x, y in ecosistema.terreno["plantas"]:
+                self.background_surface.blit(sprite_planta, (x - sprite_planta.get_width()//2, y - sprite_planta.get_height()//2))
+        sprite_planta_2 = self.sprites.get("planta_2")
+        if sprite_planta_2:
+            for x, y in ecosistema.terreno["plantas_2"]:
+                self.background_surface.blit(sprite_planta_2, (x - sprite_planta_2.get_width()//2, y - sprite_planta_2.get_height()//2))
 
     def _draw_clouds(self):
         """Dibuja y actualiza las nubes."""
@@ -464,16 +470,7 @@ class PygameView:
 
     def update_hierba_surface(self, ecosistema):
         self.hierba_surface.fill((0, 0, 0, 0))
-        hierba_sprite = self.sprites.get("hierba") if self.sprites else None
-        for gx in range(ecosistema.grid_width):
-            for gy in range(ecosistema.grid_height):
-                valor_hierba = ecosistema.grid_hierba[gx][gy]
-                if valor_hierba > 5:
-                    alpha = min(255, int((valor_hierba / MAX_HIERBA_PRADERA) * 255))
-                    if hierba_sprite:
-                        temp_sprite = hierba_sprite.copy()
-                        temp_sprite.set_alpha(alpha)
-                        self.hierba_surface.blit(temp_sprite, (gx * CELL_SIZE, gy * CELL_SIZE))
+        # La lógica de dibujado de la hierba con sprites ha sido eliminada.
 
     def _draw_recursos(self, ecosistema):
         for carcasa in ecosistema.recursos["carcasas"]:
