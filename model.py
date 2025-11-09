@@ -188,22 +188,14 @@ class Ecosistema:
         self.animales: list[Animal] = []
         self.terreno = {
             "praderas": [
-                Pradera((20, 400, 150, 150)),
-                Pradera((300, 50, 250, 100)),
-                Pradera((50, 50, 100, 150)),
-                Pradera((600, 400, 150, 120)),
-                Pradera((250, 200, 200, 50)),
-                Pradera((20, 560, 180, 120)),
-                Pradera((650, 550, 130, 130))  
+                Pradera((50, 50, 250, 150)),      # Pradera en la esquina superior izquierda
+                Pradera((500, 80, 200, 100)),     # Pradera en la zona superior derecha
+                Pradera((50, 450, 250, 200)),     # Gran pradera en la esquina inferior izquierda
+                Pradera((550, 480, 200, 150)),    # Pradera en la esquina inferior derecha
             ],
             "rios": [],
             "selvas": [
-                Selva((200, 450, 250, 180)),
-                Selva((20, 20, 100, 100)),
-                Selva((500, 250, 150, 100)),
-                Selva((700, 20, 80, 250)),
-                Selva((550, 50, 200, 200)),
-                Selva((20, 200, 120, 150))
+                Selva((350, 500, 150, 100)),      # Pequeña selva en la parte inferior central
             ],
             "montanas": [],
             "santuarios": [],

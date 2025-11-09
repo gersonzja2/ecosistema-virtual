@@ -1,3 +1,4 @@
+
 import pygame
 import random
 from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, Halcon, Insecto, Rio, Pez, CELL_SIZE, MAX_HIERBA_PRADERA, SIM_WIDTH, SCREEN_HEIGHT
@@ -80,6 +81,30 @@ class Button:
         text_rect = text_surf.get_rect(center=self.rect.center)
         surface.blit(text_surf, text_rect)
 
+class Cloud:
+    """Representa una nube que se mueve por la pantalla."""
+    def __init__(self, image, screen_width, screen_height):
+        self.image = image
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        self.reset(on_screen=True) # Inicia en una posición aleatoria en pantalla
+
+    def reset(self, on_screen=False):
+        """Reinicia la posición y velocidad de la nube."""
+        self.speed = random.uniform(0.2, 0.8) # Velocidad lenta y variable
+        self.y = random.randint(5, self.screen_height // 3) # Aparecen en el tercio superior
+        # Si on_screen es True, la posiciona en cualquier parte de la pantalla. Si no, a la izquierda.
+        if on_screen:
+            self.x = random.randint(0, self.screen_width)
+        else:
+            self.x = random.randint(-self.image.get_width() - 200, -self.image.get_width())
+
+    def update(self):
+        """Mueve la nube y la reinicia si sale de la pantalla."""
+        self.x += self.speed
+        if self.x > self.screen_width:
+            self.reset()
+
 class PygameView:
     def __init__(self):
         pygame.init()
@@ -121,6 +146,7 @@ class PygameView:
         self.hierba_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         self.background_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT))
         self.needs_static_redraw = True
+        self.clouds = self._create_clouds()
 
     def _load_sprites(self):
         sprites = {}
@@ -137,7 +163,8 @@ class PygameView:
             "Pez": {"file": "pez.png", "size": (10, 10)},
             "arbol": {"file": "arbol_medium.png", "size": (30, 30)},
             "planta": {"file": "planta_small.png", "size": (12, 12)},
-            "hierba": {"file": "hierba.png", "size": (20, 20)}
+            "hierba": {"file": "hierba.png", "size": (20, 20)},
+            "nube": {"file": "texturas_nubes.png", "size": (120, 60)}
         }
         for name, data in sprite_definitions.items():
             try:
@@ -242,6 +269,16 @@ class PygameView:
         buttons["force_eat"] = Button(SIM_WIDTH + 10, 220, 130, 30, "Forzar Comer", (0, 150, 0), COLOR_TEXT)
         buttons["force_reproduce"] = Button(SIM_WIDTH + 150, 220, 130, 30, "Forzar Reprod.", (200, 0, 200), COLOR_TEXT)
         return buttons
+
+    def _create_clouds(self):
+        """Crea la lista inicial de nubes."""
+        cloud_sprite = self.sprites.get("nube")
+        if not cloud_sprite:
+            return []
+        
+        # Aseguramos que la nube tenga transparencia
+        cloud_sprite = cloud_sprite.convert_alpha()
+        return [Cloud(cloud_sprite, SIM_WIDTH, SCREEN_HEIGHT) for _ in range(10)]
 
     def _draw_text(self, text, font, color, surface, x, y):
         text_shadow = font.render(text, 1, (0, 0, 0))
@@ -413,6 +450,13 @@ class PygameView:
             sprite = self.sprites.get("planta")
             if sprite: self.background_surface.blit(sprite, (x - sprite.get_width()//2, y - sprite.get_height()//2))
 
+    def _draw_clouds(self):
+        """Dibuja y actualiza las nubes."""
+        for cloud in self.clouds:
+            cloud.update()
+            cloud.image.set_alpha(180) # Hacemos las nubes semitransparentes
+            self.screen.blit(cloud.image, (cloud.x, cloud.y))
+
     def update_hierba_surface(self, ecosistema):
         self.hierba_surface.fill((0, 0, 0, 0))
         hierba_sprite = self.sprites.get("hierba") if self.sprites else None
@@ -446,6 +490,7 @@ class PygameView:
         self._draw_recursos(ecosistema)
         
         self._draw_animales(ecosistema, animal_seleccionado)
+        self._draw_clouds() # Dibujamos las nubes aquí para que se superpongan a todo
         self._draw_ui(ecosistema, animal_seleccionado, sim_speed)
         if not sim_over:
             # Dibujar solo los botones que no dependen de la selección
