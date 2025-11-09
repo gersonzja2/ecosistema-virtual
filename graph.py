@@ -1,4 +1,18 @@
 import pygame
+import random
+from main import SCREEN_WIDTH  # O la ruta correspondiente
+SCREEN_WIDTH = 800  # Ajusta según lo que necesites
+SCREEN_HEIGHT = 600  # Ajusta también
+
+
+def dibujar_lluvia(self):
+    """Dibuja gotas de lluvia en la pantalla."""
+    if self.ecosistema.clima_actual == "Lluvioso":
+        for _ in range(25):  # 25 gotas por ciclo
+            x = random.randint(0, SCREEN_WIDTH)
+            y = random.randint(0, SCREEN_HEIGHT)
+            pygame.draw.line(self.screen, (180, 180, 255), (x, y), (x, y + 5), 1)  # Línea de lluvia
+
 
 class PopulationGraph:
     def __init__(self, x, y, width, height, font):
