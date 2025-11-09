@@ -83,16 +83,17 @@ class Button:
 
 class Cloud:
     """Representa una nube que se mueve por la pantalla."""
-    def __init__(self, image, screen_width, screen_height):
+    def __init__(self, image, screen_width, screen_height, y_range):
         self.image = image
         self.screen_width = screen_width
         self.screen_height = screen_height
+        self.y_range = y_range
         self.reset(on_screen=True) # Inicia en una posición aleatoria en pantalla
 
     def reset(self, on_screen=False):
         """Reinicia la posición y velocidad de la nube."""
         self.speed = random.uniform(0.2, 0.8) # Velocidad lenta y variable
-        self.y = random.randint(5, self.screen_height // 3) # Aparecen en el tercio superior
+        self.y = random.randint(self.y_range[0], self.y_range[1]) # Aparecen en el rango Y especificado
         # Si on_screen es True, la posiciona en cualquier parte de la pantalla. Si no, a la izquierda.
         if on_screen:
             self.x = random.randint(0, self.screen_width)
@@ -146,7 +147,9 @@ class PygameView:
         self.hierba_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         self.background_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT))
         self.needs_static_redraw = True
-        self.clouds = self._create_clouds()
+        self.top_clouds = self._create_clouds(y_range=(5, SCREEN_HEIGHT // 3), count=10)
+        self.middle_clouds = self._create_clouds(y_range=(SCREEN_HEIGHT // 3 + 10, SCREEN_HEIGHT // 2 - 70), count=5)
+        self.bottom_clouds = self._create_clouds(y_range=(SCREEN_HEIGHT // 2 + 60, SCREEN_HEIGHT - 70), count=8)
 
     def _load_sprites(self):
         sprites = {}
@@ -270,15 +273,15 @@ class PygameView:
         buttons["force_reproduce"] = Button(SIM_WIDTH + 150, 220, 130, 30, "Forzar Reprod.", (200, 0, 200), COLOR_TEXT)
         return buttons
 
-    def _create_clouds(self):
+    def _create_clouds(self, y_range, count):
         """Crea la lista inicial de nubes."""
         cloud_sprite = self.sprites.get("nube")
         if not cloud_sprite:
             return []
         
         # Aseguramos que la nube tenga transparencia
-        cloud_sprite = cloud_sprite.convert_alpha()
-        return [Cloud(cloud_sprite, SIM_WIDTH, SCREEN_HEIGHT) for _ in range(10)]
+        cloud_sprite_alpha = cloud_sprite.convert_alpha()
+        return [Cloud(cloud_sprite_alpha, SIM_WIDTH, SCREEN_HEIGHT, y_range) for _ in range(count)]
 
     def _draw_text(self, text, font, color, surface, x, y):
         text_shadow = font.render(text, 1, (0, 0, 0))
@@ -452,7 +455,9 @@ class PygameView:
 
     def _draw_clouds(self):
         """Dibuja y actualiza las nubes."""
-        for cloud in self.clouds:
+        # Combinamos ambas listas de nubes para dibujarlas todas
+        all_clouds = self.top_clouds + self.middle_clouds + self.bottom_clouds
+        for cloud in all_clouds:
             cloud.update()
             cloud.image.set_alpha(180) # Hacemos las nubes semitransparentes
             self.screen.blit(cloud.image, (cloud.x, cloud.y))
