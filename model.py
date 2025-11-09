@@ -503,6 +503,9 @@ class Ecosistema:
         for animal in self.animales:
             animal.actualizar(self)
 
+        # Eliminar animales muertos de la simulación
+        self.animales = [animal for animal in self.animales if animal.esta_vivo]
+
         # Actualizar peces en cada río
         for rio in self.terreno["rios"]:
             for pez in rio.peces:

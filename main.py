@@ -141,6 +141,7 @@ class PygameView:
             "planta": {"file": "planta_small.png", "size": (12, 12)},
             "hierba": {"file": "hierba.png", "size": (20, 20)}
         }
+        sprite_definitions["carcasa"] = {"file": "esqueleto.png", "size": (15, 15)}
         for name, data in sprite_definitions.items():
             try:
                 sprites[name] = pygame.transform.scale(pygame.image.load(f"assets/{data['file']}"), data['size'])
@@ -392,11 +393,18 @@ class PygameView:
                         self.hierba_surface.blit(temp_sprite, (gx * CELL_SIZE, gy * CELL_SIZE))
 
     def _draw_recursos(self, ecosistema):
+        carcasa_sprite = self.sprites.get("carcasa")
         for carcasa in ecosistema.recursos["carcasas"]:
             alpha = max(0, 255 - carcasa.dias_descomposicion * 50)
-            temp_surface = pygame.Surface((10, 10), pygame.SRCALPHA)
-            pygame.draw.circle(temp_surface, COLOR_CARCASA + (alpha,), (5, 5), 5)
-            self.screen.blit(temp_surface, (carcasa.x - 5, carcasa.y - 5))
+            if carcasa_sprite:
+                temp_sprite = carcasa_sprite.copy()
+                temp_sprite.set_alpha(alpha)
+                sprite_w, sprite_h = temp_sprite.get_size()
+                self.screen.blit(temp_sprite, (carcasa.x - sprite_w // 2, carcasa.y - sprite_h // 2))
+            else:
+                temp_surface = pygame.Surface((10, 10), pygame.SRCALPHA)
+                pygame.draw.circle(temp_surface, COLOR_CARCASA + (alpha,), (5, 5), 5)
+                self.screen.blit(temp_surface, (carcasa.x - 5, carcasa.y - 5))
 
     def _draw_peces(self, ecosistema):
         """Dibuja los peces en los ríos."""
