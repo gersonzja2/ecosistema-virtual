@@ -215,6 +215,11 @@ class PygameView:
         music_text = "Música: ON" if getattr(self, 'music_playing', False) else "Música: OFF"
         buttons["music"] = Button(SIM_WIDTH + 10 + 3 * (btn_width_small + spacing), SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, music_text, (80, 80, 80), COLOR_TEXT)
         
+        # Botones contextuales (se dibujarán por separado)
+        info_panel_y = 200
+        buttons["force_eat"] = Button(SIM_WIDTH + 15, info_panel_y, 180, 30, "Forzar Comer", (211, 84, 0), COLOR_TEXT)
+        buttons["force_reproduce"] = Button(SIM_WIDTH + 205, info_panel_y, 180, 30, "Forzar Reproducción", (142, 68, 173), COLOR_TEXT)
+
         return buttons
 
     def _draw_text(self, text, font, color, surface, x, y):
@@ -305,12 +310,16 @@ class PygameView:
                 f"Nombre: {animal_seleccionado.nombre}",
                 f"Tipo: {animal_seleccionado.__class__.__name__}",
                 f"Energía: {animal_seleccionado.energia}/{animal_seleccionado.max_energia}",
-                f"Estado: {'Vivo' if animal_seleccionado.esta_vivo else 'Muerto'}",
-                f"Edad: {animal_seleccionado.edad}"
+                f"Edad: {animal_seleccionado.edad} días"
             ]
+            info.append(f"Estado: {animal_seleccionado.estado.capitalize()}")
             for line in info:
                 self._draw_text(line, self.font_small, COLOR_TEXT, self.screen, ui_x, y_offset)
                 y_offset += 15
+            
+            # Dibujar botones contextuales si hay un animal seleccionado
+            self.buttons["force_eat"].draw(self.screen)
+            self.buttons["force_reproduce"].draw(self.screen)
         else:
             herb_count = sum(1 for a in ecosistema.animales if isinstance(a, Herbivoro))
             carn_count = sum(1 for a in ecosistema.animales if isinstance(a, Carnivoro))
@@ -434,8 +443,11 @@ class PygameView:
         self._draw_pareja_seleccionada(pareja_seleccionada)
         self._draw_ui(ecosistema, animal_seleccionado, pareja_seleccionada, sim_speed)
         
-        # Dibujar solo los botones que no dependen de la selección
+        # Dibujar botones no contextuales
         for name, button in self.buttons.items():
+            # No dibujar los botones contextuales aquí, ya se hace en _draw_ui
+            if name in ["force_eat", "force_reproduce"]:
+                continue
             button.draw(self.screen)
 
         self._draw_text("ESC para salir", self.font_small, COLOR_TEXT, self.screen, 10, SCREEN_HEIGHT - 25)
@@ -541,7 +553,9 @@ class SimulationController:
             "music": self.view.toggle_music,
             "pause_resume": self._action_toggle_pause,
             "next_day": self._action_advance_day,
-            "restart": self._action_restart
+            "restart": self._action_restart,
+            "force_eat": self._action_force_eat,
+            "force_reproduce": self._action_force_reproduce
         }
         
         for name, cls in animal_map.items():
@@ -567,6 +581,15 @@ class SimulationController:
         if self.ecosistema.dia_total < self.dias_simulacion and self.ecosistema.animales:
             return self._avanzar_dia()
         return True
+    
+    def _action_force_eat(self):
+        if self.animal_seleccionado:
+            self.animal_seleccionado.buscar_comida(forzado=True)
+
+    def _action_force_reproduce(self):
+        if self.animal_seleccionado and self.pareja_seleccionada:
+            self.animal_seleccionado.buscar_pareja_para_reproducir(self.pareja_seleccionada)
+
 
     def run(self):
         self._poblar_ecosistema()
@@ -607,7 +630,11 @@ class SimulationController:
                 pos = pygame.mouse.get_pos()
                 
                 # Determinar qué botones están activos para la comprobación de clics
-                active_buttons = list(self.view.buttons.keys())
+                active_buttons = [name for name, btn in self.view.buttons.items() if name not in ["force_eat", "force_reproduce"]]
+                if self.animal_seleccionado:
+                    active_buttons.append("force_eat")
+                    active_buttons.append("force_reproduce")
+
                 clicked_button_name = self.get_clicked_button(pos, active_buttons)
                 if clicked_button_name:
                     action = self.button_actions.get(clicked_button_name)
