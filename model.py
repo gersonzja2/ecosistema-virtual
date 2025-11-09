@@ -239,6 +239,7 @@ class Animal(ABC):
                     self.pareja_objetivo.pareja_objetivo = None
                     self.estado = "deambulando"
                     self.pareja_objetivo = None
+                    return # Terminar actualización de este tick tras reproducir
                 else:
                     self._x_float += (dx / dist) * self.velocidad
                     self._y_float += (dy / dist) * self.velocidad
@@ -595,6 +596,9 @@ class Ecosistema:
 
             for c in self.recursos["carcasas"]: c.dias_descomposicion += 1
             self.recursos["carcasas"] = [c for c in self.recursos["carcasas"] if c.dias_descomposicion < 5]
+
+            for animal in self.animales:
+                animal._edad += 1
 
             self.animales_nuevos = []
 

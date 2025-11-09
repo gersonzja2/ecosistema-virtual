@@ -678,7 +678,11 @@ class SimulationController:
 
     def _action_force_reproduce(self):
         if self.animal_seleccionado and self.pareja_seleccionada:
-            self.animal_seleccionado.buscar_pareja_para_reproducir(self.pareja_seleccionada)
+            # Asegurarse de que son de la misma especie antes de intentar la reproducción
+            if type(self.animal_seleccionado) == type(self.pareja_seleccionada):
+                self.animal_seleccionado.buscar_pareja_para_reproducir(self.pareja_seleccionada)
+            else:
+                print(f"Error: {self.animal_seleccionado.nombre} y {self.pareja_seleccionada.nombre} no son de la misma especie y no pueden reproducirse.")
 
 
     def run(self):
