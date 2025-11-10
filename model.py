@@ -167,6 +167,7 @@ class Animal(ABC):
         self.target_x = None
         self.target_y = None
         self.tiempo_deambulando = 0
+        self.ticks_desde_ultimo_paso = random.randint(0, 300) # Inicialización aleatoria para desincronizar
         self.ecosistema = None
         self.pareja_objetivo = None
         self.objetivo_puente = None
@@ -261,6 +262,12 @@ class Animal(ABC):
         # Asegurarse de que el animal no se salga de los límites de la simulación
         self._x_float = max(BORDE_MARGEN, min(self._x_float, SIM_WIDTH - BORDE_MARGEN))
         self._y_float = max(BORDE_MARGEN, min(self._y_float, SCREEN_HEIGHT - BORDE_MARGEN))
+
+        self.ticks_desde_ultimo_paso += 1
+        if self.ticks_desde_ultimo_paso > 300:  # 300 ticks = 5 segundos a 60 FPS
+            self.reproducir_sonido(2, volume=0.3)  # Tipo 2 es el sonido de caminar
+            self.ticks_desde_ultimo_paso = random.randint(-50, 50) # Reinicio aleatorio para mantener la desincronización
+
 
         self.tiempo_deambulando -= 1
 
@@ -437,6 +444,7 @@ class Animal(ABC):
 
         if self._energia <= 0:
             ecosistema.agregar_carcasa(self.x, self.y)
+            self.reproducir_sonido(3) #Reproducir sonido al morir
 
 class Herbivoro(Animal):
     pass
