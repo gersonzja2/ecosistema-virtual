@@ -1,2 +1,5 @@
 __pycache__/
 *.json
+*.db
+#mi_base.sqlite
+

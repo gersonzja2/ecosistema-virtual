@@ -1,8 +1,17 @@
 from abc import ABC, abstractmethod
 import pygame
 import json
+from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey
+from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 import math
 import random
+
+# --- Configuración de SQLAlchemy ---
+DATABASE_URL = "sqlite:///ecosistema.db"
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+# --- Fin de la configuración de SQLAlchemy ---
 
 SIM_WIDTH = 800
 SCREEN_HEIGHT = 700
@@ -10,6 +19,68 @@ CELL_SIZE = 20
 MAX_HIERBA_NORMAL = 70
 BORDE_MARGEN = 20 # Margen de seguridad para que los animales no se acerquen a los bordes
 MAX_HIERBA_PRADERA = 120
+
+# --- Modelos de Base de Datos (SQLAlchemy) ---
+class SimulationStateDB(Base):
+    __tablename__ = "simulation_state"
+    id = Column(Integer, primary_key=True, index=True)
+    dia_total = Column(Integer)
+    grid_hierba_json = Column(String) # Guardaremos el grid como un string JSON
+    selvas_json = Column(String)
+    rios_json = Column(String)
+
+class AnimalDB(Base):
+    __tablename__ = "animales"
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String)
+    tipo = Column(String) # Para saber qué clase de animal es (Conejo, Leopardo, etc.)
+    x = Column(Float)
+    y = Column(Float)
+    edad = Column(Integer)
+    energia = Column(Float)
+    max_energia = Column(Float)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "animal",
+        "polymorphic_on": tipo,
+    }
+
+class HerbivoroDB(AnimalDB): __mapper_args__ = {"polymorphic_identity": "Herbivoro"}
+class CarnivoroDB(AnimalDB): __mapper_args__ = {"polymorphic_identity": "Carnivoro"}
+class OmnivoroDB(AnimalDB): __mapper_args__ = {"polymorphic_identity": "Omnivoro"}
+class ConejoDB(AnimalDB): __mapper_args__ = {"polymorphic_identity": "Conejo"}
+class RatonDB(AnimalDB): __mapper_args__ = {"polymorphic_identity": "Raton"}
+class CabraDB(AnimalDB): __mapper_args__ = {"polymorphic_identity": "Cabra"}
+class LeopardoDB(AnimalDB): __mapper_args__ = {"polymorphic_identity": "Leopardo"}
+class GatoDB(AnimalDB): __mapper_args__ = {"polymorphic_identity": "Gato"}
+class CerdoDB(AnimalDB): __mapper_args__ = {"polymorphic_identity": "Cerdo"}
+class MonoDB(AnimalDB): __mapper_args__ = {"polymorphic_identity": "Mono"}
+class HalconDB(AnimalDB): __mapper_args__ = {"polymorphic_identity": "Halcon"}
+class InsectoDB(AnimalDB): __mapper_args__ = {"polymorphic_identity": "Insecto"}
+
+# --- Fin de Modelos de Base de Datos ---
+
+# Mapeo de clases de simulación a clases de DB para guardar
+SIM_TO_DB_CLASS_MAP = {
+    "Conejo": ConejoDB,
+    "Raton": RatonDB,
+    "Cabra": CabraDB,
+    "Leopardo": LeopardoDB,
+    "Gato": GatoDB,
+    "Cerdo": CerdoDB,
+    "Mono": MonoDB,
+    "Halcon": HalconDB,
+    "Insecto": InsectoDB,
+    # Añade aquí cualquier otro tipo de animal que no sea una clase final
+    "Herbivoro": HerbivoroDB,
+    "Carnivoro": CarnivoroDB,
+    "Omnivoro": OmnivoroDB,
+    "Animal": AnimalDB,
+}
+
+
+# --- Creación de las tablas en la base de datos ---
+Base.metadata.create_all(bind=engine)
 
 class Terreno:
     def __init__(self, rect):
@@ -827,48 +898,98 @@ class Ecosistema:
                         animal.estado = "regresando_a_zona"
                     animal.objetivo_comida = None # Cancela cualquier caza actual
 
-    def guardar_estado(self, archivo="save_state.json"):
-        estado = {
-            "dia_total": self.dia_total,
-            "grid_hierba": self.grid_hierba,
-            "selvas": [{"rect": list(s.rect), "bayas": s.bayas} for s in self.terreno["selvas"]],
-            "rios": [{"rect": list(r.rect), "num_peces": len(r.peces)} for r in self.terreno["rios"]],
-            "animales": [
-                {
-                    "tipo": a.__class__.__name__,
-                    "nombre": a.nombre, "x": a.x, "y": a.y, "edad": a.edad,
-                    "energia": a.energia, "max_energia": a.max_energia
-                }
-                for a in self.animales
-            ]
-        }
-        with open(archivo, 'w') as f:
-            json.dump(estado, f, indent=4)
+    def guardar_estado(self):
+        """Guarda el estado de la simulación en la base de datos SQLite."""
+        print("Guardando estado en la base de datos...")
+        db = SessionLocal()
+        try:
+            # Limpiar estado anterior
+            db.query(AnimalDB).delete()
+            db.query(SimulationStateDB).delete()
 
-    def cargar_estado(self, archivo="save_state.json"):
-        with open(archivo, 'r') as f:
-            estado = json.load(f)
+            # Guardar estado general de la simulación
+            selvas_data = [{"bayas": s.bayas} for s in self.terreno["selvas"]]
+            rios_data = [{"num_peces": len(r.peces)} for r in self.terreno["rios"]]
+            
+            estado_sim = SimulationStateDB(
+                dia_total=self.dia_total,
+                grid_hierba_json=json.dumps(self.grid_hierba),
+                selvas_json=json.dumps(selvas_data),
+                rios_json=json.dumps(rios_data)
+            )
+            db.add(estado_sim)
 
-        self.dia_total = estado["dia_total"]
-        self.grid_hierba = estado.get("grid_hierba", self.grid_hierba)
-        for i, s_data in enumerate(estado["selvas"]):
+            # Guardar cada animal
+            for animal in self.animales:
+                animal_class_name = animal.__class__.__name__
+                db_class = SIM_TO_DB_CLASS_MAP.get(animal_class_name, AnimalDB) # Fallback a AnimalDB
+
+                animal_db = db_class(
+                    nombre=animal.nombre,
+                    # 'tipo' se establece automáticamente por la identidad polimórfica
+                    x=animal._x_float,
+                    y=animal._y_float,
+                    edad=animal.edad,
+                    energia=animal.energia,
+                    max_energia=animal.max_energia
+                )
+                db.add(animal_db)
+            
+            db.commit()
+            print("¡Estado guardado con éxito!")
+        except Exception as e:
+            print(f"Error al guardar el estado: {e}")
+            db.rollback()
+        finally:
+            db.close()
+
+    def cargar_estado(self):
+        """Carga el estado de la simulación desde la base de datos SQLite."""
+        print("Cargando estado desde la base de datos...")
+        db = SessionLocal()
+        estado_sim = db.query(SimulationStateDB).first()
+        if not estado_sim:
+            print("No se encontró un estado guardado en la base de datos.")
+            db.close()
+            raise FileNotFoundError("No hay estado guardado.")
+
+        self.dia_total = estado_sim.dia_total
+        self.grid_hierba = json.loads(estado_sim.grid_hierba_json)
+        
+        selvas_data = json.loads(estado_sim.selvas_json)
+        for i, s_data in enumerate(selvas_data):
             self.terreno["selvas"][i].bayas = s_data["bayas"]
         
-        for i, r_data in enumerate(estado.get("rios", [])):
+        rios_data = json.loads(estado_sim.rios_json)
+        for i, r_data in enumerate(rios_data):
             rio = self.terreno["rios"][i]
             rio.peces = []
             for _ in range(r_data.get("num_peces", 20)):
                 x = random.randint(rio.rect.left + 5, rio.rect.right - 5)
                 y = random.randint(rio.rect.top + 5, rio.rect.bottom - 5)
                 rio.peces.append(Pez(x, y, rio))
-
+        
         self.animales = []
-        tipos = {"Herbivoro": Herbivoro, "Carnivoro": Carnivoro, "Omnivoro": Omnivoro, "Conejo": Conejo, "Raton": Raton, "Cabra": Cabra, "Leopardo": Leopardo, "Gato": Gato, "Cerdo": Cerdo, "Mono": Mono, "Halcon": Halcon, "Insecto": Insecto}
-        for a_data in estado["animales"]:
-            tipo_clase = tipos.get(a_data["tipo"])
+        # Mapeo de 'tipo' de DB a clase de simulación para cargar
+        DB_TO_SIM_CLASS_MAP = {
+            "Conejo": Conejo, "Raton": Raton, "Cabra": Cabra,
+            "Leopardo": Leopardo, "Gato": Gato, "Halcon": Halcon,
+            "Cerdo": Cerdo, "Mono": Mono, "Insecto": Insecto,
+            # Clases base por si acaso
+            "Herbivoro": Herbivoro,
+            "Carnivoro": Carnivoro,
+            "Omnivoro": Omnivoro
+        }
+
+        for animal_db in db.query(AnimalDB).all():
+            # animal_db.tipo ahora contiene la polymorphic_identity ('Conejo', 'Leopardo', etc.)
+            tipo_clase = DB_TO_SIM_CLASS_MAP.get(animal_db.tipo)
             if tipo_clase:
-                max_energia_default = max(80, min(120, 100 + random.randint(-10, 10)))
-                animal = tipo_clase(a_data["nombre"], a_data["x"], a_data["y"], 
-                                    a_data.get("edad", 0), a_data.get("energia", 100), 
-                                    max_energia=a_data.get("max_energia", max_energia_default))
+                # SQLAlchemy ya ha creado una instancia de la clase DB correcta (ej. ConejoDB)
+                animal = tipo_clase(animal_db.nombre, animal_db.x, animal_db.y, 
+                                    animal_db.edad, animal_db.energia, 
+                                    max_energia=animal_db.max_energia)
                 self.animales.append(animal)
+        
+        db.close()
+        print("¡Estado cargado con éxito!")
