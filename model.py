@@ -437,17 +437,16 @@ class Carnivoro(Animal):
         if self.estado == "deambulando":
             if self.modo_caza_activado and self.energia < self.max_energia * 0.8:
                 # Modo caza activado: buscar herbívoros cercanos
-                presas_cercanas = [
-                    animal for animal in ecosistema.obtener_animales_cercanos(self.x, self.y, radio=15)
-                    if isinstance(animal, Herbivoro)
-                ]
+                presas_cercanas = [a for a in ecosistema.obtener_animales_cercanos(self.x, self.y, radio=150) if isinstance(a, Herbivoro)]
                 if presas_cercanas:
                     presa_elegida = random.choice(presas_cercanas)
                     print(f"{self.nombre} ha detectado a {presa_elegida.nombre} y va a cazarlo.")
                     self.estado = "cazando_herbivoro"
                     self.objetivo_comida = presa_elegida
-                    super().actualizar(ecosistema) # Llama a la lógica de persecución
-                    return 
+                    # No llamamos a super().actualizar() aquí, la lógica de persecución se ejecutará en el siguiente tick.
+                    # La lógica de persecución ya está en Animal.actualizar, que se llamará después de esta función.
+                    # El return aquí es importante para no ejecutar el super().actualizar(ecosistema) del final.
+                    return
 
             elif not self.modo_caza_activado and self.energia < self.max_energia * 0.5:
                 # Modo caza desactivado: buscar peces si tiene hambre
@@ -458,10 +457,8 @@ class Carnivoro(Animal):
                         print(f"{self.nombre} tiene hambre y va a cazar peces al río.")
                         self.estado = "cazando_pez"
                         self.objetivo_comida = rio_cercano
-                        super().actualizar(ecosistema)
+                        # No es necesario llamar a super().actualizar() aquí. El estado se procesará en el siguiente tick.
                         return
-
-
 
         # Si no se tomó una decisión especial, ejecutar la lógica normal de Animal
         super().actualizar(ecosistema)
@@ -748,13 +745,14 @@ class Ecosistema:
                 self.grid_animales[key] = []
             self.grid_animales[key].append(animal)
 
-    def obtener_animales_cercanos(self, x, y, radio=2):
-        """Obtiene los animales cercanos a una posición"""
+    def obtener_animales_cercanos(self, x, y, radio=50):
+        """Obtiene los animales en un radio de píxeles usando el grid para optimizar."""
         grid_x = int(x // CELL_SIZE)
         grid_y = int(y // CELL_SIZE)
+        grid_radio = int(radio // CELL_SIZE) + 1
         cercanos = []
-        for dx in range(-radio, radio + 1):
-            for dy in range(-radio, radio + 1):
+        for dx in range(-grid_radio, grid_radio + 1):
+            for dy in range(-grid_radio, grid_radio + 1):
                 key = (grid_x + dx, grid_y + dy)
                 if key in self.grid_animales:
                     cercanos.extend(self.grid_animales[key])

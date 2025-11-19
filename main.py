@@ -761,7 +761,7 @@ class SimulationController:
             
             if not animal_clicado:
                 # Si se hace clic en espacio vacío, se deselecciona todo.
-                self.animal_seleccionado = None # CORRECCIÓN: Limpiar también la pareja.
+                self.animal_seleccionado = None
                 self.pareja_seleccionada = None
             elif not self.animal_seleccionado or self.animal_seleccionado == animal_clicado:
                 self.animal_seleccionado = animal_clicado
