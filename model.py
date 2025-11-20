@@ -358,7 +358,15 @@ class Animal(ABC):
             ecosistema.agregar_carcasa(self.x, self.y)
 
 class Herbivoro(Animal):
-    pass
+    def actualizar(self, ecosistema):
+        # Lógica de decisión para herbívoros
+        if self.estado == "deambulando" and self.energia < self.max_energia * 0.7:
+            # Si tiene hambre, busca comida (hierba)
+            self.estado = "buscando_comida"
+            # La lógica de 'actualizar' en la clase Animal se encargará de comer hierba.
+
+        # Ejecutar la lógica normal de Animal
+        super().actualizar(ecosistema)
 
 class Carnivoro(Animal):
     def actualizar(self, ecosistema):
@@ -396,7 +404,37 @@ class Carnivoro(Animal):
         super().actualizar(ecosistema)
 
 class Omnivoro(Animal):
-    pass
+    def actualizar(self, ecosistema):
+        # Lógica de decisión para carnívoros
+        if self.estado == "deambulando":
+            if self.modo_caza_activado and self.energia < self.max_energia * 0.8:
+                # Modo caza activado: buscar herbívoros cercanos
+                presas_cercanas = [
+                    animal for animal in ecosistema.obtener_animales_cercanos(self.x, self.y, radio=15)
+                    if isinstance(animal, Herbivoro)
+                ]
+                if presas_cercanas:
+                    presa_elegida = random.choice(presas_cercanas)
+                    print(f"{self.nombre} ha detectado a {presa_elegida.nombre} y va a cazarlo.")
+                    self.estado = "cazando_herbivoro"
+                    self.objetivo_comida = presa_elegida
+                    super().actualizar(ecosistema) # Llama a la lógica de persecución
+                    return 
+
+            elif not self.modo_caza_activado and self.energia < self.max_energia * 0.5:
+                # Modo caza desactivado: buscar peces si tiene hambre
+                grid_x, grid_y = self.x // CELL_SIZE, self.y // CELL_SIZE
+                if (grid_x, grid_y) in ecosistema.terrain_cache["rio"]:
+                    rio_cercano = ecosistema.terrain_cache["rio"][(grid_x, grid_y)]
+                    if rio_cercano and any(not p.fue_comido for p in rio_cercano.peces):
+                        print(f"{self.nombre} tiene hambre y va a cazar peces al río.")
+                        self.estado = "cazando_pez"
+                        self.objetivo_comida = rio_cercano
+                        super().actualizar(ecosistema)
+                        return
+
+        # Si no se tomó una decisión especial, ejecutar la lógica normal de Animal
+        super().actualizar(ecosistema)
 
 class Conejo(Herbivoro):
     def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
@@ -827,7 +865,7 @@ class Ecosistema:
                         animal.estado = "regresando_a_zona"
                     animal.objetivo_comida = None # Cancela cualquier caza actual
 
-    def guardar_estado(self, archivo="save_state.json"):
+    def guardar_estado(self, archivo):
         estado = {
             "dia_total": self.dia_total,
             "grid_hierba": self.grid_hierba,
@@ -845,7 +883,12 @@ class Ecosistema:
         with open(archivo, 'w') as f:
             json.dump(estado, f, indent=4)
 
-    def cargar_estado(self, archivo="save_state.json"):
+    def cargar_estado(self, archivo):
+        import os
+        if not os.path.exists(archivo):
+            print(f"Archivo de guardado no encontrado: {archivo}. Iniciando nueva simulación.")
+            return # No hay nada que cargar, se mantendrá el estado por defecto.
+
         with open(archivo, 'r') as f:
             estado = json.load(f)
 

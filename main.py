@@ -2,6 +2,7 @@
 import pygame
 import random
 from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, Halcon, Insecto, Rio, Pez, CELL_SIZE, MAX_HIERBA_PRADERA, SIM_WIDTH, SCREEN_HEIGHT
+from menu import Menu
 
 SCREEN_WIDTH = 1200
 UI_WIDTH = 400
@@ -583,12 +584,17 @@ class SimulationController:
         self.ecosistema = Ecosistema()
         self.view = PygameView()
         self.dias_simulacion = dias_simulacion
+        self.menu = Menu(self.view.screen, self.view.font_header, self.view.font_normal, self.view.font_small)
+        
+        self.current_state = "MENU" # Estados: "MENU", "SIMULATION"
+        self.save_path = None
+
         self.animal_seleccionado = None
         self.pareja_seleccionada = None
         self.paused = True
         
         self.sim_speed_multiplier = 3
-        self.base_time_per_hour = 25
+        self.base_time_per_hour = 50 # Ralentizamos un poco para mejor visualización
         self.last_update_time = pygame.time.get_ticks()
         self.clock = pygame.time.Clock()
 
@@ -645,13 +651,18 @@ class SimulationController:
         for name, cls in animal_map.items():
             self.button_actions[f"add_{name}"] = lambda species=cls: self.ecosistema.agregar_animal(species)
         
-    def _action_save(self): self.ecosistema.guardar_estado()
+    def _action_save(self):
+        if self.save_path:
+            self.ecosistema.guardar_estado(self.save_path)
+            print(f"Partida guardada en {self.save_path}")
+        else:
+            print("Error: No hay una ruta de guardado definida.")
+
     def _action_load(self):
-        try: self.ecosistema.cargar_estado(); self.view.graph.history = []; self.view.needs_static_redraw = True
-        except FileNotFoundError: print("¡No se encontró ningún archivo de guardado!")
+        if self.save_path:
+            self.ecosistema.cargar_estado(self.save_path); self.view.graph.history = []; self.view.needs_static_redraw = True
 
     def _action_restart(self):
-        print("Reiniciando simulación...")
         self.ecosistema = Ecosistema()
         self._poblar_ecosistema()
         self.view.graph.history.clear()
@@ -659,6 +670,7 @@ class SimulationController:
         self.pareja_seleccionada = None
         self.view.needs_static_redraw = True
         self.paused = True
+        print("Simulación reiniciada a su estado inicial.")
     def _action_toggle_pause(self): self.paused = not self.paused
     def _action_advance_day(self):
         if self.ecosistema.dia_total < self.dias_simulacion and self.ecosistema.animales:
@@ -691,32 +703,58 @@ class SimulationController:
 
 
     def run(self):
-        self._poblar_ecosistema()
-        
         running = True
         sim_over = False
         self._setup_button_actions()
 
         while running:
             self.clock.tick(60)  # Mantener 60 FPS constantes
+            
+            if self.current_state == "MENU":
+                self.menu.draw()
+                running = self.handle_menu_events()
+            
+            elif self.current_state == "SIMULATION":
+                current_time = pygame.time.get_ticks()
+                delta_time = current_time - self.last_update_time
 
-            current_time = pygame.time.get_ticks()
-            delta_time = current_time - self.last_update_time
+                if not self.paused and not sim_over and delta_time > self.base_time_per_hour / self.sim_speed_multiplier:
+                    sim_over = self._avanzar_hora()
+                    self.last_update_time = current_time
+                    
+                running, sim_over = self.handle_simulation_events(running, sim_over)
 
-            if not self.paused and not sim_over and delta_time > self.base_time_per_hour / self.sim_speed_multiplier:
-                sim_over = self._avanzar_hora()
-                self.last_update_time = current_time
-                
-            running, sim_over = self.handle_events(running, sim_over)
-
-            self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier)
+                self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier)
     
         self.view.close()
 
-    def handle_events(self, running, sim_over):
+    def handle_menu_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
-                return False, sim_over
+                return False
+            
+            selected_path = self.menu.handle_event(event)
+            if selected_path:
+                self.save_path = selected_path
+                self.ecosistema = Ecosistema() # Reinicia el ecosistema
+                self.ecosistema.cargar_estado(self.save_path) # Intenta cargar la partida
+                
+                # Si no hay animales (partida nueva), poblar el ecosistema.
+                if not self.ecosistema.animales:
+                    self._poblar_ecosistema()
+
+                self.view.graph.history.clear()
+                self.view.needs_static_redraw = True
+                self.current_state = "SIMULATION"
+        return True
+
+    def handle_simulation_events(self, running, sim_over):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                # Al presionar ESC, guarda y vuelve al menú en lugar de cerrar
+                self._action_save()
+                self.current_state = "MENU"
+                return True, sim_over
             
             if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
                 self.view.toggle_music()
@@ -738,7 +776,7 @@ class SimulationController:
                     action = self.button_actions.get(clicked_button_name)
                     if action:
                         result = action()
-                        if clicked_button_name in ["next_day", "restart"]:
+                        if clicked_button_name == "next_day":
                             sim_over = result or sim_over
                 else:
                     self.select_animal_at(pos)
