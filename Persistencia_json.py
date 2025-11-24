@@ -19,12 +19,12 @@ class Escenario:
         escenario = cls()
         escenario.cosas_varias = data.get('cosas_varias', 1)
         return escenario
-              
+
 class Persistencia:
     def __init__(self):
         self.cantidad = 0
     
-    def guarda(self, escenario):
+    def guardar(self, escenario):
         try:
             with open("miarchivo.json", 'w', encoding='utf-8') as fos:
                 # Convertimos el objeto a diccionario y luego a JSON
