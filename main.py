@@ -1,8 +1,8 @@
 import pygame
 import os
-from logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto
-from interfaz import PygameView, Menu
-import persistencia # Importamos el nuevo módulo
+from Logica.Logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto
+from Interfaz.Interfaz import PygameView, Menu
+import Persistencia.Persistencia as persistencia # Importamos el nuevo módulo
 
 class SimulationController:
     def __init__(self, dias_simulacion: int):
