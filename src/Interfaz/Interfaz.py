@@ -213,7 +213,7 @@ class Menu:
             # Simplificamos el texto o asumimos que el controlador manejará la lógica de carga/creación.
             start_text = "Empezar / Cargar"
             if not self.selected_save.startswith("partida_"): # Heurística simple
-                 start_text = "Cargar Partida"
+                start_text = "Cargar Partida"
             start_surf = self.font_header.render(start_text, True, COLOR_TEXT)
             self.screen.blit(start_surf, (self.buttons["start_game"].centerx - start_surf.get_width() // 2, self.buttons["start_game"].centery - start_surf.get_height() // 2))
 
@@ -241,15 +241,15 @@ class PygameView:
 
         self.music_playing = False
         try:
-            music_files = [f for f in os.listdir("assets") if f.endswith(".mp3")]
+            music_files = [f for f in os.listdir("Sounds") if f.endswith(".mp3")]
             if music_files:
-                music_path = os.path.join("assets", random.choice(music_files))
+                music_path = os.path.join("Sounds", random.choice(music_files))
                 pygame.mixer.music.load(music_path)
                 pygame.mixer.music.set_volume(0.15)
                 pygame.mixer.music.play(-1)
                 self.music_playing = True
             else:
-                print("No se encontraron archivos .mp3 en la carpeta 'assets'. La música no se reproducirá.")
+                print("No se encontraron archivos .mp3 en la carpeta 'Sounds'. La música no se reproducirá.")
         except Exception as e:
             print(f"No se pudo cargar o reproducir la música de fondo: {e}")
         self.buttons = self._create_buttons()

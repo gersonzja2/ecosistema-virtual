@@ -13,7 +13,7 @@ class Ecosistema:
         self.animales: list[Animal] = []
         
         # Carga y configuración de sonidos
-        self.sonido_rio = pygame.mixer.Sound("assets/Sonidos listos/rio 1.wav")
+        self.sonido_rio = pygame.mixer.Sound("Sounds/rio 1.wav")
         self.sonido_rio.set_volume(1.5)
 
         self.terreno = {

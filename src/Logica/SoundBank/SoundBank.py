@@ -17,7 +17,7 @@ class SoundBank:
     Busca en 'assets' y 'assets/Sonidos listos'.
     """
     _cache = {}
-    _folders = ["assets", os.path.join("assets", "Sonidos listos")]
+    _folders = ["assets", os.path.join("assets", "Sonidos listos"), os.path.join("assets", "Sounds"), "Sounds"]
 
     # Índices para los tipos de sonido
     APARECE, CAMINA, MUERE = 1, 2, 3
@@ -37,12 +37,16 @@ class SoundBank:
 
     @classmethod
     def _find_file(cls, base, idx):
-        candidates = [f"{base} {idx}.wav", f"{base}{idx}.wav", f"{base}_{idx}.wav"]
+        name_patterns = [f"{base} {idx}", f"{base}{idx}", f"{base}_{idx}"]
+        extensions = [".wav", ".mp3", ".ogg"]
+        
         for folder in cls._folders:
-            for name in candidates:
-                path = os.path.join(folder, name)
-                if os.path.isfile(path):
-                    return path
+            for name in name_patterns:
+                for ext in extensions:
+                    path = os.path.join(folder, name + ext)
+                    if os.path.isfile(path):
+                        return path
+        print(f"[SoundBank] Aviso: No se encontró sonido para '{base}' (tipo {idx})")
         return None
 
     @classmethod
