@@ -108,6 +108,7 @@ class SimulationController:
         self.pareja_seleccionada = None
         self.view.needs_static_redraw = True
         self.paused = True
+        # No es necesario reiniciar sim_over aquí, ya que se gestiona en el bucle principal.
         print("Simulación reiniciada a su estado inicial.")
     def _action_toggle_pause(self): self.paused = not self.paused
     def _action_advance_day(self):
@@ -149,6 +150,7 @@ class SimulationController:
             self.pareja_seleccionada = None
         elif not self.animal_seleccionado or self.animal_seleccionado == animal_clicado:
             # Seleccionar el animal principal (o deseleccionar la pareja si se vuelve a clicar)
+            # Si se vuelve a hacer clic en el animal ya seleccionado, se deselecciona la pareja.
             self.animal_seleccionado = animal_clicado
             self.pareja_seleccionada = None
         else:
@@ -226,6 +228,10 @@ class SimulationController:
             command_type = command.get("type")
 
             if command_type == "quit":
+                # Si el usuario cierra la ventana durante la simulación
+                if event.type == pygame.QUIT:
+                    running = False # Termina el bucle principal
+                    break
                 self._action_save() # Guardar al salir
                 self.current_state = "MENU" # Volver al menú
             elif command_type == "toggle_music":

@@ -4,35 +4,7 @@ import random
 from src.Logica.Logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, SIM_WIDTH, SCREEN_HEIGHT
 import os
 import json
-
-# === BEGIN AUDIO INIT ===
-# Reduce latencia y mejora estabilidad del mixer
-pygame.mixer.pre_init(44100, -16, 2, 512)
-pygame.init()
-try:
-    if not pygame.mixer.get_init():
-        pygame.mixer.init(44100, -16, 2, 512)
-    pygame.mixer.set_num_channels(32)  # varios sonidos simultáneos
-except Exception as e:
-    print("Aviso: no se pudo inicializar pygame.mixer:", e)
-# === END AUDIO INIT ===
-
-SCREEN_WIDTH = 1200
-UI_WIDTH = 400
-COLOR_BACKGROUND = (22, 160, 133)
-COLOR_SIM_AREA = (46, 204, 113)
-COLOR_HERBIVORO = (255, 255, 255)
-COLOR_CARNIVORO = (231, 76, 60)
-COLOR_OMNIVORO = (52, 152, 219)
-COLOR_TEXT = (236, 240, 241)
-COLOR_HEART = (255, 105, 180)
-COLOR_RIO = (41, 128, 185)
-COLOR_SELVA = (39, 174, 96)
-COLOR_BUTTON = (26, 188, 156)
-COLOR_PEZ = (0, 191, 255)
-COLOR_CARCASA = (128, 128, 128)
-COLOR_SELECTED = (241, 196, 15)
-
+from src.Interfaz.Constantes import *
 class PopulationGraph:
     def __init__(self, x, y, width, height, font):
         self.rect = pygame.Rect(x, y, width, height)
