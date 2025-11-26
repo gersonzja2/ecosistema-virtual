@@ -865,53 +865,67 @@ class Ecosistema:
                         animal.estado = "regresando_a_zona"
                     animal.objetivo_comida = None # Cancela cualquier caza actual
 
-    def guardar_estado(self, archivo):
-        estado = {
+    def to_dict(self):
+        """Convierte el estado del ecosistema a un diccionario serializable."""
+        return {
             "dia_total": self.dia_total,
+            "hora_actual": self.hora_actual,
             "grid_hierba": self.grid_hierba,
             "selvas": [{"rect": list(s.rect), "bayas": s.bayas} for s in self.terreno["selvas"]],
-            "rios": [{"rect": list(r.rect), "num_peces": len(r.peces)} for r in self.terreno["rios"]],
+            "rios": [{"rect": list(r.rect), "peces": [{"x": p.x, "y": p.y, "energia": p.energia} for p in r.peces]} for r in self.terreno["rios"]],
             "animales": [
                 {
                     "tipo": a.__class__.__name__,
                     "nombre": a.nombre, "x": a.x, "y": a.y, "edad": a.edad,
-                    "energia": a.energia, "max_energia": a.max_energia
+                    "energia": a.energia, "max_energia": a.max_energia,
+                    "estado": a.estado
                 }
                 for a in self.animales
-            ]
+            ],
+            "carcasas": [{"x": c.x, "y": c.y, "energia_restante": c.energia_restante, "dias": c.dias_descomposicion} for c in self.recursos["carcasas"]]
         }
-        with open(archivo, 'w') as f:
-            json.dump(estado, f, indent=4)
 
-    def cargar_estado(self, archivo):
-        import os
-        if not os.path.exists(archivo):
-            print(f"Archivo de guardado no encontrado: {archivo}. Iniciando nueva simulación.")
-            return # No hay nada que cargar, se mantendrá el estado por defecto.
+    @classmethod
+    def from_dict(cls, data):
+        """Crea una instancia de Ecosistema a partir de un diccionario."""
+        ecosistema = cls() # Crea una nueva instancia con valores por defecto
 
-        with open(archivo, 'r') as f:
-            estado = json.load(f)
+        # Cargar estado simple
+        ecosistema.dia_total = data.get("dia_total", 1)
+        ecosistema.hora_actual = data.get("hora_actual", 0)
+        ecosistema.grid_hierba = data.get("grid_hierba", ecosistema.grid_hierba)
 
-        self.dia_total = estado["dia_total"]
-        self.grid_hierba = estado.get("grid_hierba", self.grid_hierba)
-        for i, s_data in enumerate(estado["selvas"]):
-            self.terreno["selvas"][i].bayas = s_data["bayas"]
+        # Cargar terrenos
+        for i, s_data in enumerate(data.get("selvas", [])):
+            if i < len(ecosistema.terreno["selvas"]):
+                ecosistema.terreno["selvas"][i].bayas = s_data.get("bayas", 25)
         
-        for i, r_data in enumerate(estado.get("rios", [])):
-            rio = self.terreno["rios"][i]
+        for i, r_data in enumerate(data.get("rios", [])):
+            if i >= len(ecosistema.terreno["rios"]): continue
+            rio = ecosistema.terreno["rios"][i]
             rio.peces = []
-            for _ in range(r_data.get("num_peces", 20)):
-                x = random.randint(rio.rect.left + 5, rio.rect.right - 5)
-                y = random.randint(rio.rect.top + 5, rio.rect.bottom - 5)
-                rio.peces.append(Pez(x, y, rio))
+            for p_data in r_data.get("peces", []):
+                pez = Pez(p_data["x"], p_data["y"], rio)
+                pez.energia = p_data.get("energia", 50)
+                rio.peces.append(pez)
 
-        self.animales = []
+        # Cargar animales
+        ecosistema.animales = []
         tipos = {"Herbivoro": Herbivoro, "Carnivoro": Carnivoro, "Omnivoro": Omnivoro, "Conejo": Conejo, "Raton": Raton, "Cabra": Cabra, "Leopardo": Leopardo, "Gato": Gato, "Cerdo": Cerdo, "Mono": Mono, "Halcon": Halcon, "Insecto": Insecto}
-        for a_data in estado["animales"]:
+        for a_data in data.get("animales", []):
             tipo_clase = tipos.get(a_data["tipo"])
             if tipo_clase:
-                max_energia_default = max(80, min(120, 100 + random.randint(-10, 10)))
                 animal = tipo_clase(a_data["nombre"], a_data["x"], a_data["y"], 
                                     a_data.get("edad", 0), a_data.get("energia", 100), 
-                                    max_energia=a_data.get("max_energia", max_energia_default))
-                self.animales.append(animal)
+                                    max_energia=a_data.get("max_energia"))
+                animal.estado = a_data.get("estado", "deambulando")
+                ecosistema.animales.append(animal)
+        
+        # Cargar carcasas
+        ecosistema.recursos["carcasas"] = []
+        for c_data in data.get("carcasas", []):
+            carcasa = Carcasa(c_data["x"], c_data["y"], c_data.get("energia_restante", 60))
+            carcasa.dias_descomposicion = c_data.get("dias", 0)
+            ecosistema.recursos["carcasas"].append(carcasa)
+
+        return ecosistema

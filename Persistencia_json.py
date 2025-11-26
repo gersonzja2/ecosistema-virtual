@@ -46,6 +46,6 @@ class Persistencia:
 # Prueba del código
 e = Escenario()
 p = Persistencia()
-p.guarda(e)
+p.guardar(e)
 e2 = p.rescatar()
 e2.mostrar()
