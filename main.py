@@ -2,6 +2,8 @@
 import pygame
 import random
 from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Leopardo, Gato, Cerdo, Mono, Cabra, Halcon, Insecto, Rio, Pez, CELL_SIZE, MAX_HIERBA_PRADERA, SIM_WIDTH, SCREEN_HEIGHT
+import os
+import json
 
 SCREEN_WIDTH = 1200
 UI_WIDTH = 400
@@ -17,6 +19,7 @@ COLOR_SELVA = (39, 174, 96)
 COLOR_BUTTON = (26, 188, 156)
 COLOR_PEZ = (0, 191, 255)
 COLOR_CARCASA = (128, 128, 128)
+COLOR_SELECTED = (241, 196, 15)
 
 class PopulationGraph:
     def __init__(self, x, y, width, height, font):
@@ -106,6 +109,155 @@ class Cloud:
         if self.x > self.screen_width:
             self.reset()
 
+class Menu:
+    def __init__(self, screen, font_header, font_normal, font_small):
+        self.screen = screen
+        self.font_header = font_header
+        self.font_normal = font_normal
+        self.font_small = font_small
+        self.users = []
+        self.saves = []
+        self.selected_user = None
+        self.selected_save = None
+        self.input_text = ""
+        self.input_active = False
+        self.load_users()
+
+        self.buttons = {
+            "new_user": pygame.Rect(SIM_WIDTH + 50, 200, 300, 40),
+            "new_save": pygame.Rect(SIM_WIDTH + 50, 450, 300, 40),
+            "start_game": pygame.Rect(SIM_WIDTH + 50, 550, 300, 50)
+        }
+
+    def load_users(self):
+        """Carga los nombres de usuario de las carpetas en 'saves'."""
+        self.users = []
+        if not os.path.exists("saves"):
+            os.makedirs("saves")
+        try:
+            self.users = [d for d in os.listdir("saves") if os.path.isdir(os.path.join("saves", d))]
+        except FileNotFoundError:
+            pass
+
+    def load_saves_for_user(self, username):
+        """Carga las partidas guardadas para un usuario específico."""
+        self.saves = []
+        user_path = os.path.join("saves", username)
+        if os.path.exists(user_path):
+            self.saves = [f for f in os.listdir(user_path) if f.endswith(".json")]
+
+    def handle_event(self, event):
+        """Maneja los eventos de Pygame para el menú."""
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            # Lógica para seleccionar usuarios
+            user_y_start = 100
+            for i, user in enumerate(self.users):
+                user_rect = pygame.Rect(SIM_WIDTH + 50, user_y_start + i * 30, 300, 30)
+                if user_rect.collidepoint(event.pos):
+                    self.selected_user = user
+                    self.selected_save = None
+                    self.load_saves_for_user(user)
+                    return None
+
+            # Lógica para seleccionar partidas
+            save_y_start = 300
+            for i, save in enumerate(self.saves):
+                save_rect = pygame.Rect(SIM_WIDTH + 50, save_y_start + i * 30, 300, 30)
+                if save_rect.collidepoint(event.pos):
+                    self.selected_save = save
+                    return None
+
+            # Lógica para botones
+            if self.buttons["new_user"].collidepoint(event.pos):
+                self.input_active = True
+                self.input_text = ""
+                return None
+            
+            if self.buttons["new_save"].collidepoint(event.pos) and self.selected_user:
+                # Crear una nueva partida (se guardará al salir de la simulación)
+                num_saves = len(self.saves)
+                new_save_name = f"partida_{num_saves + 1}.json"
+                self.selected_save = new_save_name
+                # No creamos el archivo aquí, solo preparamos el nombre.
+                return self.get_selected_path()
+
+            if self.buttons["start_game"].collidepoint(event.pos) and self.selected_user and self.selected_save:
+                return self.get_selected_path()
+
+        if event.type == pygame.KEYDOWN and self.input_active:
+            if event.key == pygame.K_RETURN:
+                if self.input_text:
+                    new_user_path = os.path.join("saves", self.input_text)
+                    if not os.path.exists(new_user_path):
+                        os.makedirs(new_user_path)
+                    self.load_users()
+                    self.selected_user = self.input_text
+                    self.load_saves_for_user(self.selected_user)
+                self.input_active = False
+                self.input_text = ""
+            elif event.key == pygame.K_BACKSPACE:
+                self.input_text = self.input_text[:-1]
+            else:
+                self.input_text += event.unicode
+        
+        return None
+
+    def get_selected_path(self):
+        if self.selected_user and self.selected_save:
+            return os.path.join("saves", self.selected_user, self.selected_save)
+        return None
+
+    def draw(self):
+        """Dibuja el menú completo en la pantalla."""
+        self.screen.fill(COLOR_BACKGROUND)
+        
+        # Título
+        title_surf = self.font_header.render("Simulador de Ecosistema", True, COLOR_TEXT)
+        self.screen.blit(title_surf, (SIM_WIDTH // 2 - title_surf.get_width() // 2, 200))
+        
+        # Panel derecho
+        pygame.draw.rect(self.screen, (40, 40, 40), (SIM_WIDTH, 0, UI_WIDTH, SCREEN_HEIGHT))
+        
+        # Sección de Usuarios
+        self.screen.blit(self.font_header.render("Usuarios", True, COLOR_TEXT), (SIM_WIDTH + 20, 50))
+        user_y_start = 100
+        for i, user in enumerate(self.users):
+            color = COLOR_SELECTED if user == self.selected_user else COLOR_TEXT
+            user_surf = self.font_normal.render(user, True, color)
+            self.screen.blit(user_surf, (SIM_WIDTH + 50, user_y_start + i * 30))
+
+        # Botón/Input para nuevo usuario
+        pygame.draw.rect(self.screen, COLOR_BUTTON, self.buttons["new_user"])
+        if self.input_active:
+            input_surf = self.font_normal.render(self.input_text + "|", True, COLOR_TEXT)
+        else:
+            input_surf = self.font_normal.render("Crear Nuevo Usuario", True, COLOR_TEXT)
+        self.screen.blit(input_surf, (self.buttons["new_user"].x + 10, self.buttons["new_user"].y + 10))
+
+        # Sección de Partidas
+        if self.selected_user:
+            self.screen.blit(self.font_header.render(f"Partidas de {self.selected_user}", True, COLOR_TEXT), (SIM_WIDTH + 20, 250))
+            save_y_start = 300
+            for i, save in enumerate(self.saves):
+                color = COLOR_SELECTED if save == self.selected_save else COLOR_TEXT
+                save_name = save.replace(".json", "").replace("_", " ").capitalize()
+                save_surf = self.font_normal.render(save_name, True, color)
+                self.screen.blit(save_surf, (SIM_WIDTH + 50, save_y_start + i * 30))
+            
+            # Botón para nueva partida
+            pygame.draw.rect(self.screen, COLOR_BUTTON, self.buttons["new_save"])
+            new_save_surf = self.font_normal.render("Nueva Partida", True, COLOR_TEXT)
+            self.screen.blit(new_save_surf, (self.buttons["new_save"].x + 10, self.buttons["new_save"].y + 10))
+
+        # Botón para Iniciar
+        if self.selected_user and self.selected_save:
+            pygame.draw.rect(self.screen, (0, 150, 0), self.buttons["start_game"])
+            start_text = "Cargar Partida" if os.path.exists(self.get_selected_path()) else "Empezar Nueva Partida"
+            start_surf = self.font_header.render(start_text, True, COLOR_TEXT)
+            self.screen.blit(start_surf, (self.buttons["start_game"].centerx - start_surf.get_width() // 2, self.buttons["start_game"].centery - start_surf.get_height() // 2))
+
+        pygame.display.flip()
+
 class PygameView:
     def __init__(self):
         pygame.init()
@@ -128,7 +280,6 @@ class PygameView:
 
         self.music_playing = False
         try:
-            import os
             music_files = [f for f in os.listdir("assets") if f.endswith(".mp3")]
             if music_files:
                 music_path = os.path.join("assets", random.choice(music_files))
@@ -577,18 +728,44 @@ class PygameView:
         except Exception as e:
             print(f"Error al alternar música: {e}")
 
+class Persistencia:
+    def guardar(self, ecosistema, archivo):
+        """Convierte el objeto Ecosistema a diccionario y lo guarda en un archivo JSON."""
+        if not archivo:
+            print("Error: No se proporcionó una ruta de archivo para guardar.")
+            return
+        try:
+            with open(archivo, 'w', encoding='utf-8') as f:
+                json.dump(ecosistema.to_dict(), f, indent=4)
+            print(f"Partida guardada exitosamente en {archivo}")
+        except Exception as e:
+            print(f"Error al guardar la partida: {e}")
+
+    def rescatar(self, archivo):
+        """Carga datos desde un archivo JSON y los usa para crear un objeto Ecosistema."""
+        with open(archivo, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            e_rescatado = Ecosistema.from_dict(data)
+            print(f"Partida cargada desde {archivo}")
+            return e_rescatado
+
 class SimulationController:
     def __init__(self, dias_simulacion: int):
         pygame.init()  # Asegurar que pygame está inicializado
         self.ecosistema = Ecosistema()
         self.view = PygameView()
         self.dias_simulacion = dias_simulacion
+        self.menu = Menu(self.view.screen, self.view.font_header, self.view.font_normal, self.view.font_small)
+        
+        self.current_state = "MENU" # Estados: "MENU", "SIMULATION"
+        self.save_path = None
+
         self.animal_seleccionado = None
         self.pareja_seleccionada = None
         self.paused = True
         
         self.sim_speed_multiplier = 3
-        self.base_time_per_hour = 25
+        self.base_time_per_hour = 50 # Ralentizamos un poco para mejor visualización
         self.last_update_time = pygame.time.get_ticks()
         self.clock = pygame.time.Clock()
 
@@ -645,13 +822,31 @@ class SimulationController:
         for name, cls in animal_map.items():
             self.button_actions[f"add_{name}"] = lambda species=cls: self.ecosistema.agregar_animal(species)
         
-    def _action_save(self): self.ecosistema.guardar_estado()
+    def _action_save(self):
+        """Utiliza la clase Persistencia para guardar el estado del ecosistema."""
+        if self.save_path:
+            p = Persistencia()
+            p.guardar(self.ecosistema, self.save_path)
+        else:
+            print("Error: No hay una ruta de guardado definida.")
+
     def _action_load(self):
-        try: self.ecosistema.cargar_estado(); self.view.graph.history = []; self.view.needs_static_redraw = True
-        except FileNotFoundError: print("¡No se encontró ningún archivo de guardado!")
+        """Utiliza la clase Persistencia para cargar el estado del ecosistema."""
+        if self.save_path:
+            try:
+                p = Persistencia()
+                self.ecosistema = p.rescatar(self.save_path)
+                self.view.graph.history.clear()
+                self.view.needs_static_redraw = True
+            except FileNotFoundError:
+                print(f"No se encontró un archivo de guardado en {self.save_path}. Se iniciará una nueva simulación.")
+                self.ecosistema = Ecosistema() # Creamos un ecosistema vacío
+                self._poblar_ecosistema()
+            except Exception as e:
+                print(f"Error al cargar la partida: {e}. Reiniciando simulación.")
+                self._action_restart()
 
     def _action_restart(self):
-        print("Reiniciando simulación...")
         self.ecosistema = Ecosistema()
         self._poblar_ecosistema()
         self.view.graph.history.clear()
@@ -659,6 +854,7 @@ class SimulationController:
         self.pareja_seleccionada = None
         self.view.needs_static_redraw = True
         self.paused = True
+        print("Simulación reiniciada a su estado inicial.")
     def _action_toggle_pause(self): self.paused = not self.paused
     def _action_advance_day(self):
         if self.ecosistema.dia_total < self.dias_simulacion and self.ecosistema.animales:
@@ -691,32 +887,59 @@ class SimulationController:
 
 
     def run(self):
-        self._poblar_ecosistema()
-        
         running = True
         sim_over = False
         self._setup_button_actions()
 
         while running:
             self.clock.tick(60)  # Mantener 60 FPS constantes
+            
+            if self.current_state == "MENU":
+                self.menu.draw()
+                running = self.handle_menu_events()
+            
+            elif self.current_state == "SIMULATION":
+                current_time = pygame.time.get_ticks()
+                delta_time = current_time - self.last_update_time
 
-            current_time = pygame.time.get_ticks()
-            delta_time = current_time - self.last_update_time
+                if not self.paused and not sim_over and delta_time > self.base_time_per_hour / self.sim_speed_multiplier:
+                    sim_over = self._avanzar_hora()
+                    self.last_update_time = current_time
+                    
+                running, sim_over = self.handle_simulation_events(running, sim_over)
 
-            if not self.paused and not sim_over and delta_time > self.base_time_per_hour / self.sim_speed_multiplier:
-                sim_over = self._avanzar_hora()
-                self.last_update_time = current_time
-                
-            running, sim_over = self.handle_events(running, sim_over)
-
-            self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier)
+                self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier)
     
         self.view.close()
 
-    def handle_events(self, running, sim_over):
+    def handle_menu_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
-                return False, sim_over
+                return False
+            
+            selected_path = self.menu.handle_event(event)
+            if selected_path:
+                self.save_path = selected_path
+                self.ecosistema = Ecosistema() # Crea una nueva instancia de ecosistema
+                self._action_load() # Intenta cargar la partida desde el path seleccionado
+                
+                # Si no hay animales (partida nueva), poblar el ecosistema.
+                if not self.ecosistema.animales and os.path.exists(self.save_path):
+                    self._poblar_ecosistema()
+                    print("Archivo de guardado vacío o corrupto. Poblando con nuevos animales.")
+
+                self.view.graph.history.clear()
+                self.view.needs_static_redraw = True
+                self.current_state = "SIMULATION"
+        return True
+
+    def handle_simulation_events(self, running, sim_over):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                # Al presionar ESC, guarda y vuelve al menú en lugar de cerrar
+                self._action_save()
+                self.current_state = "MENU"
+                return True, sim_over
             
             if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
                 self.view.toggle_music()
@@ -738,7 +961,7 @@ class SimulationController:
                     action = self.button_actions.get(clicked_button_name)
                     if action:
                         result = action()
-                        if clicked_button_name in ["next_day", "restart"]:
+                        if clicked_button_name == "next_day":
                             sim_over = result or sim_over
                 else:
                     self.select_animal_at(pos)
@@ -761,7 +984,7 @@ class SimulationController:
             
             if not animal_clicado:
                 # Si se hace clic en espacio vacío, se deselecciona todo.
-                self.animal_seleccionado = None # CORRECCIÓN: Limpiar también la pareja.
+                self.animal_seleccionado = None
                 self.pareja_seleccionada = None
             elif not self.animal_seleccionado or self.animal_seleccionado == animal_clicado:
                 self.animal_seleccionado = animal_clicado

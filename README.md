@@ -1,85 +1,70 @@
-# 💻 Simulador de Ecosistema Virtual 🌿
+# Simulador de Ecosistema Virtual
 
-Proyecto de un simulador de ecosistema virtual, desarrollado en Python con la librería Pygame.
+Este proyecto es una simulación de un ecosistema 2D desarrollada en Python utilizando la librería Pygame. El simulador modela las interacciones entre diferentes especies de animales (herbívoros, carnívoros y omnívoros) y su entorno dinámico.
 
-El objetivo es crear un pequeño mundo digital donde diferentes especies de animales (herbívoros, carnívoros y omnívoros) interactúan entre sí y con su entorno. Los animales nacen, buscan comida, beben agua, huyen de los depredadores, se reproducen y mueren, todo de forma controlada.
+## Características Principales
 
-## ✨ Características Principales
+- **Fauna Diversa**: Incluye múltiples especies como conejos, cabras, leopardos, cerdos, y más, cada una con su propia dieta y comportamiento.
+- **Entorno Dinámico**: El mapa contiene diferentes biomas como praderas, selvas y ríos, que influyen en la disponibilidad de recursos.
+- **Ciclo de Vida Completo**: Los animales nacen, crecen, se reproducen, buscan comida y eventualmente mueren, dejando carcasas que pueden ser consumidas.
+- **Comportamientos Complejos**:
+  - Los herbívoros pastan en busca de hierba.
+  - Los carnívoros pueden cazar herbívoros o pescar en los ríos.
+  - Los omnívoros adaptan su dieta según la disponibilidad, comiendo hierba, bayas o cazando.
+  - Los animales buscan pareja para reproducirse.
+- **Sistema Climático y de Día/Noche**: La simulación avanza hora por hora, con un ciclo de 24 horas. El clima puede cambiar, afectando el crecimiento de los recursos (ej. "Sequía").
+- **Interfaz de Usuario Interactiva**: Un panel de control permite monitorear el estado del ecosistema, controlar la simulación y añadir nuevos animales.
+- **Visualización de Datos**: Un gráfico en tiempo real muestra la evolución de las poblaciones de herbívoros, carnívoros y omnívoros.
+- **Sistema de Guardado y Carga**:
+  - Crea perfiles de usuario.
+  - Guarda y carga múltiples partidas por cada perfil.
 
-- **IA de Animales:** Cada animal tiene sus propias necesidades (hambre, sed) y estados (deambulando, cazando, huyendo). Toman decisiones sobre qué hacer a continuación.
-- **Diversidad de Especies:**
-  - **Herbívoros:** Conejo, Ratón, Cabra, Insecto.
-  - **Carnívoros:** Leopardo, Gato, Halcón.
-  - **Omnívoros:** Cerdo, Mono.
-- **Entorno Dinámico:**
-  - **Ciclo Día/Noche y Estaciones:** El paso del tiempo afecta el crecimiento de los recursos y el comportamiento de los animales.
-  - **Terrenos Múltiples:** Praderas con hierba, selvas con bayas y ríos con peces.
-- **Interfaz Gráfica Interactiva:**
-  - Visualización en tiempo real de todos los animales y recursos.
-  - Panel de control para pausar/reanudar la simulación, avanzar los días y añadir nuevos animales.
-  - Gráfico que muestra la evolución de las poblaciones a lo largo del tiempo.
-  - Posibilidad de hacer clic en un animal para ver sus estadísticas detalladas.
-- **Persistencia:** ¡Puedes guardar el estado de tu simulación y cargarlo más tarde para continuar donde lo dejaste!
-- **Música de fondo y sonidos:** Para hacer la experiencia más amena :)
+## Tecnologías Utilizadas
 
-## ⚙️ Requisitos
-
-Para ejecutar este proyecto, solo necesitas tener Python y Pygame instalados.
-
-- **Python 3.x**
+- **Python 3**
 - **Pygame**
 
-## 🚀 Cómo Empezar
+## ¿Cómo Ejecutar el Proyecto?
 
-1.  **Clona o descarga este repositorio:**
-    ```bash
-    git clone https://github.com/tu-usuario/tu-repositorio.git
-    cd tu-repositorio
-    ```
+1.  **Prerrequisitos**:
+    - Asegúrate de tener Python 3 instalado.
+    - Necesitarás la librería Pygame. Puedes instalarla con pip:
+      ```bash
+      pip install pygame
+      ```
 
-2.  **Instala Pygame:**
-    Si no lo tienes instalado, puedes hacerlo con pip:
-    ```bash
-    pip install pygame
-    ```
+2.  **Estructura de Archivos**:
+    - El proyecto requiere una carpeta `assets/` en el mismo directorio que los scripts, la cual debe contener las imágenes (sprites, texturas) y la música (`.mp3`).
+    - Se creará una carpeta `saves/` automáticamente para almacenar las partidas guardadas.
 
-3.  **(Opcional pero recomendado) Sprites y Música:**
-    El simulador funciona sin imágenes, usando círculos de colores. Pero para una mejor experiencia, crea una carpeta llamada `assets` en la raíz del proyecto y coloca dentro los archivos de imagen (`.png`) para cada animal y los archivos de música (`.mp3`).
+3.  **Ejecución**:
+    - Para iniciar el simulador, ejecuta el archivo `main.py` desde tu terminal:
+      ```bash
+      python main.py
+      ```
 
-4.  **Ejecuta el simulador:**
-    ```bash
-    python main.py
-    ```
+## Controles y Funcionalidades de la Interfaz
 
-¡Y listo! La simulación comenzará en modo de pausa. Puedes usar los botones de la interfaz para empezar.
+### Menú Principal
+- **Selección de Usuario**: Haz clic en un nombre de usuario para ver sus partidas guardadas.
+- **Crear Nuevo Usuario**: Escribe un nombre y presiona `Enter` para crear un nuevo perfil.
+- **Selección de Partida**: Elige una partida existente para cargarla o selecciona "Nueva Partida" para empezar desde cero.
+- **Empezar/Cargar**: Inicia la simulación con la configuración seleccionada.
 
-## 🎮 Controles
+### En la Simulación
+- **Clic izquierdo sobre un animal**: Selecciona un animal para ver sus detalles en el panel de información.
+- **Clic izquierdo sobre un segundo animal**: Si ya tienes uno seleccionado, el segundo será elegido como posible pareja para la reproducción.
+- **Tecla `ESC`**: Guarda el estado actual de la partida y vuelve al menú principal.
 
-- **Pausa/Reanudar:** Inicia o detiene el paso del tiempo.
-- **Adelantar Día:** Simula un día completo de forma instantánea.
-- **Añadir Animal:** Introduce un nuevo animal de la especie seleccionada en el ecosistema.
-- **Guardar/Cargar/Reiniciar:** Gestiona el estado de la simulación.
-- **Clic en un animal:** Muestra sus detalles en el panel de información.
-- **ESC:** Cierra la aplicación.
-
-## 👥 Roles del Equipo
-
-Este proyecto fue desarrollado por un equipo dedicado de estudiantes apasionados por la programación y la biología computacional.
-
-- **Encargado de la logica y el comportamiento animal(Backend):** Responsable de la implementación de la lógica del ecosistema, el modelo de datos y la inteligencia artificial de los animales.
-  - *Encargado: Gerson Zambrana*
-- **Desarrollador de Interfaz de Usuario (Frontend):** A cargo del diseño y la implementación de la interfaz gráfica con Pygame, la visualización de datos, los controles interactivos y la experiencia de usuario.
-  - *Encargada: Hans Mamani*
-- **Control de Calidad de sonido:** Encargado de realizar las pruebas funcionales, identificar y reportar errores, y la implementacion de sonidos y musica de fondo
-  - *Encargado: Juan Ojeda*
-
-## � Posibles Mejoras (TO-DO)
-
-- [ ] **Comportamientos más complejos:** Implementar caza en manada para algunos carnívoros o comportamiento de rebaño para herbívoros.
-- [ ] **Mejorar el terreno:** Añadir terrenos no transitables como montañas o rocas.
-- [ ] **Más eventos climáticos:** Como lluvias que aceleren el crecimiento de la hierba o inviernos más duros.
-- [ ] **Optimizar la detección de presas:** Mejorar la lógica para que los depredadores elijan presas de forma más inteligente (ej. la más débil o la más cercana).
-- [ ] **Refactorizar el código de la UI:** Separar la lógica de la interfaz en su propio módulo para que `main.py` quede más limpio.
+### Panel de Control (UI)
+- **Añadir Animales**: Botones para introducir nuevas especies al ecosistema.
+- **Pausa/Reanudar**: Detiene o continúa el paso del tiempo en la simulación.
+- **Adelantar Día**: Avanza la simulación 24 horas de golpe.
+- **Guardar/Cargar/Reiniciar**: Gestiona el estado de la partida actual.
+- **Música ON/OFF**: Activa o desactiva la música de fondo.
+- **Alimentar Herbívoros**: Ordena a todos los herbívoros y omnívoros con baja energía que busquen comida.
+- **Cazar Herbívoros / Regresar Carnívoros**: Activa un modo de caza donde los carnívoros cruzan los ríos para cazar en el territorio de los herbívoros. Al desactivarlo, regresan a su zona.
+- **Forzar Reproducción**: Con dos animales de la misma especie seleccionados, inicia el comportamiento de apareamiento entre ellos.
 
 ---
-*Proyecto realizado como parte de un ejercicio de programación y simulación.*
+*Registro de desarrollo en `bitacora.txt`.*
