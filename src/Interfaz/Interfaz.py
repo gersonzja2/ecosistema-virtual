@@ -241,15 +241,16 @@ class PygameView:
 
         self.music_playing = False
         try:
-            music_files = [f for f in os.listdir("Sounds") if f.endswith(".mp3")]
+            music_folder = "assets"  # La música de fondo está en 'assets'
+            music_files = [f for f in os.listdir(music_folder) if f.endswith(".mp3")]
             if music_files:
-                music_path = os.path.join("Sounds", random.choice(music_files))
+                music_path = os.path.join(music_folder, random.choice(music_files))
                 pygame.mixer.music.load(music_path)
                 pygame.mixer.music.set_volume(0.15)
                 pygame.mixer.music.play(-1)
                 self.music_playing = True
             else:
-                print("No se encontraron archivos .mp3 en la carpeta 'Sounds'. La música no se reproducirá.")
+                print(f"No se encontraron archivos .mp3 en la carpeta '{music_folder}'. La música no se reproducirá.")
         except Exception as e:
             print(f"No se pudo cargar o reproducir la música de fondo: {e}")
         self.buttons = self._create_buttons()
