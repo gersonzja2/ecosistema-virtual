@@ -741,25 +741,58 @@ class PygameView:
             print(f"Error al alternar música: {e}")
 
 class Persistencia:
+    """
+    Gestiona el guardado y la carga del estado de la simulación.
+    Implementa mecanismos de respaldo para prevenir la pérdida de datos.
+    """
     def guardar(self, ecosistema, archivo):
-        """Convierte el objeto Ecosistema a diccionario y lo guarda en un archivo JSON."""
+        """
+        Guarda el estado del ecosistema en un archivo JSON.
+        Crea un respaldo del archivo anterior antes de escribir.
+        """
         if not archivo:
             print("Error: No se proporcionó una ruta de archivo para guardar.")
             return
+
+        # Crear un respaldo del guardado anterior
+        if os.path.exists(archivo):
+            try:
+                os.rename(archivo, archivo + ".bak")
+                print(f"Respaldo creado en {archivo}.bak")
+            except OSError as e:
+                print(f"Advertencia: No se pudo crear el respaldo. Error: {e}")
+
         try:
             with open(archivo, 'w', encoding='utf-8') as f:
                 json.dump(ecosistema.to_dict(), f, indent=4)
             print(f"Partida guardada exitosamente en {archivo}")
         except Exception as e:
             print(f"Error al guardar la partida: {e}")
+            # Si el guardado falla, intentar restaurar el respaldo
+            if os.path.exists(archivo + ".bak"):
+                os.rename(archivo + ".bak", archivo)
+                print("Se ha restaurado el guardado anterior desde el respaldo.")
 
     def rescatar(self, archivo):
-        """Carga datos desde un archivo JSON y los usa para crear un objeto Ecosistema."""
-        with open(archivo, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            e_rescatado = Ecosistema.from_dict(data)
-            print(f"Partida cargada desde {archivo}")
-            return e_rescatado
+        """
+        Carga un ecosistema desde un archivo JSON.
+        Si el archivo principal falla, intenta cargar desde el respaldo (.bak).
+        """
+        try:
+            with open(archivo, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                print(f"Partida cargada desde {archivo}")
+                return Ecosistema.from_dict(data)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"No se pudo cargar {archivo} ({e}). Intentando cargar respaldo...")
+            archivo_bak = archivo + ".bak"
+            if os.path.exists(archivo_bak):
+                with open(archivo_bak, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    print(f"Partida cargada exitosamente desde el respaldo {archivo_bak}")
+                    return Ecosistema.from_dict(data)
+            # Si no hay archivo principal ni respaldo, la excepción se propagará
+            raise FileNotFoundError(f"No se encontró un archivo de guardado válido ni un respaldo para {archivo}")
 
 class SimulationController:
     def __init__(self, dias_simulacion: int):
@@ -851,12 +884,16 @@ class SimulationController:
                 self.view.graph.history.clear()
                 self.view.needs_static_redraw = True
             except FileNotFoundError:
-                print(f"No se encontró un archivo de guardado en {self.save_path}. Se iniciará una nueva simulación.")
-                self.ecosistema = Ecosistema() # Creamos un ecosistema vacío
+                print(f"No se encontró archivo de guardado en {self.save_path}. Creando nueva partida.")
+                self.ecosistema = Ecosistema()
                 self._poblar_ecosistema()
             except Exception as e:
-                print(f"Error al cargar la partida: {e}. Reiniciando simulación.")
+                # Captura otros errores (ej. JSON corrupto, datos inválidos)
+                print(f"Error crítico al cargar la partida: {e}. Se reiniciará la simulación.")
                 self._action_restart()
+        elif not self.ecosistema.animales: # Validación post-carga
+            print("Partida cargada vacía. Poblando con animales iniciales.")
+            self._poblar_ecosistema()
 
     def _action_restart(self):
         self.ecosistema = Ecosistema()
@@ -897,7 +934,6 @@ class SimulationController:
             else:
                 print(f"Error: {self.animal_seleccionado.nombre} y {self.pareja_seleccionada.nombre} no son de la misma especie y no pueden reproducirse.")
 
-
     def run(self):
         running = True
         sim_over = False
@@ -933,12 +969,12 @@ class SimulationController:
             if selected_path:
                 self.save_path = selected_path
                 self.ecosistema = Ecosistema() # Crea una nueva instancia de ecosistema
-                self._action_load() # Intenta cargar la partida desde el path seleccionado
+                self._action_load() # Carga o crea una nueva partida
                 
-                # Si no hay animales (partida nueva), poblar el ecosistema.
-                if not self.ecosistema.animales and os.path.exists(self.save_path):
+                # Validación: si el archivo no existía y se creó uno nuevo, poblarlo.
+                if not self.ecosistema.animales and not os.path.exists(self.save_path):
+                    print("Creando un nuevo mundo y poblándolo con animales.")
                     self._poblar_ecosistema()
-                    print("Archivo de guardado vacío o corrupto. Poblando con nuevos animales.")
 
                 self.view.graph.history.clear()
                 self.view.needs_static_redraw = True
