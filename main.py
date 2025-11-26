@@ -5,6 +5,18 @@ from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Leo
 import os
 import json
 
+# === BEGIN AUDIO INIT ===
+# Reduce latencia y mejora estabilidad del mixer
+pygame.mixer.pre_init(44100, -16, 2, 512)
+pygame.init()
+try:
+    if not pygame.mixer.get_init():
+        pygame.mixer.init(44100, -16, 2, 512)
+    pygame.mixer.set_num_channels(32)  # varios sonidos simultáneos
+except Exception as e:
+    print("Aviso: no se pudo inicializar pygame.mixer:", e)
+# === END AUDIO INIT ===
+
 SCREEN_WIDTH = 1200
 UI_WIDTH = 400
 COLOR_BACKGROUND = (22, 160, 133)
