@@ -1,7 +1,7 @@
 
 import pygame
 import random
-from Logica.Logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, SIM_WIDTH, SCREEN_HEIGHT
+from src.Logica.Logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, SIM_WIDTH, SCREEN_HEIGHT
 import os
 import json
 
@@ -550,6 +550,21 @@ class PygameView:
             self._draw_text("para ver sus detalles.", self.font_small, COLOR_TEXT, self.screen, ui_x, y_offset)
 
         self.graph.draw(self.screen)
+        
+        # Dibujar todos los botones de la UI aquí para asegurar que están por encima del panel
+        for name, button in self.buttons.items():
+            # Botones contextuales que dependen del estado
+            if name == "force_reproduce" and not animal_seleccionado:
+                continue
+            if name == "hunt" and animal_seleccionado:
+                continue
+            if name == "feed_herbivores" and animal_seleccionado:
+                continue
+            
+            # El resto de botones se dibujan siempre
+            button.draw(self.screen)
+
+
 
     def _create_static_background(self, ecosistema):
         """Crea la superficie de fondo con elementos que no cambian (terreno, decoraciones)."""
@@ -669,14 +684,6 @@ class PygameView:
         self._draw_pareja_seleccionada(pareja_seleccionada)
         self._draw_ui(ecosistema, animal_seleccionado, pareja_seleccionada, sim_speed)
         
-        # Dibujar botones no contextuales
-        for name, button in self.buttons.items():
-            # El botón de reproducción se dibuja condicionalmente en _draw_ui
-            if name == "force_reproduce" and not animal_seleccionado:
-                continue
-            # El resto de botones se dibujan siempre
-            button.draw(self.screen)
-
         self._draw_text("ESC para salir", self.font_small, COLOR_TEXT, self.screen, 10, SCREEN_HEIGHT - 25)
         if self.mouse_pos and self.mouse_pos[0] < SIM_WIDTH:
             coord_text = f"({self.mouse_pos[0]}, {self.mouse_pos[1]})"

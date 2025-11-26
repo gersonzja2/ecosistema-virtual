@@ -1,8 +1,8 @@
 import pygame
 import os
-from Logica.Logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto
-from Interfaz.Interfaz import PygameView, Menu
-import Persistencia.Persistencia as persistencia # Importamos el nuevo módulo
+from src.Logica.Logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto
+from src.Interfaz.Interfaz import PygameView, Menu
+import src.Persistencia.Persistencia as persistencia # Importamos el nuevo módulo
 
 class SimulationController:
     def __init__(self, dias_simulacion: int):
@@ -91,13 +91,14 @@ class SimulationController:
     def _action_load(self):
         """Utiliza la clase Persistencia para cargar el estado del ecosistema."""
         if self.save_path:
-            self.ecosistema = persistencia.cargar_partida(self.save_path)
-            self.view.graph.history.clear()
-            self.view.needs_static_redraw = True
-
-        elif not self.ecosistema.animales: # Validación post-carga
-            print("Partida cargada vacía. Poblando con animales iniciales.")
-            self._poblar_ecosistema()
+            loaded_ecosystem = persistencia.cargar_partida(self.save_path)
+            if loaded_ecosystem:
+                self.ecosistema = loaded_ecosystem
+                self.view.graph.history.clear()
+                self.view.needs_static_redraw = True
+            else:
+                # If loading fails or file doesn't exist, create a new ecosystem
+                self.ecosistema = Ecosistema()
 
     def _action_restart(self):
         self.ecosistema = Ecosistema()

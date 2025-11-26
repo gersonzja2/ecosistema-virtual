@@ -1,7 +1,7 @@
 import json
 import os
 import shutil
-from Logica.Logica import Ecosistema
+from ..Logica.Logica import Ecosistema
 
 def guardar_partida(ecosistema: Ecosistema, ruta_archivo: str):
     """
