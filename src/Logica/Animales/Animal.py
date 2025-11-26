@@ -2,8 +2,8 @@ import math
 import random
 import pygame
 from abc import ABC, abstractmethod
-import src.Logica.SoundBank as Sb # Tipos will be defined in this file
-from src.Logica.Terrenos import Rio
+import src.Logica.SoundBank.SoundBank as Sb # Tipos will be defined in this file
+from src.Logica.Terrenos.Terrenos import Rio
 
 SIM_WIDTH = 800
 SCREEN_HEIGHT = 700

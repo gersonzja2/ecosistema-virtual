@@ -3,7 +3,7 @@ import random
 import pygame
 from abc import ABC, abstractmethod
 from src.Logica.Animales.Animal import Herbivoro, Carnivoro, Omnivoro
-from src.Logica.Terrenos import Rio
+
 
 class Conejo(Herbivoro):
     def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):

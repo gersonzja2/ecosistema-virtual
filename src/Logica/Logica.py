@@ -1,12 +1,8 @@
-from abc import ABC, abstractmethod
 import pygame
-import json
 import math
 import random
-import os
-from src.Logica.Terrenos import Terreno, Rio, Selva, Pradera, Pez, Carcasa, MAX_HIERBA_NORMAL, MAX_HIERBA_PRADERA
-import src.Logica.SoundBank as Sb
-import src.Logica.Terrenos as Terrenos
+from src.Logica.Terrenos.Terrenos import Rio, Selva, Pradera, Pez, Carcasa
+import src.Logica.Terrenos.Terrenos as Terrenos
 from src.Logica.Animales.Animal import Animal, CELL_SIZE, SCREEN_HEIGHT, BORDE_MARGEN, SIM_WIDTH
 from src.Logica.Animales.animales import Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto, Herbivoro, Carnivoro, Omnivoro
 

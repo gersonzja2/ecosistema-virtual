@@ -1,0 +1,1 @@
+print("Terrenos listos para usar.")
