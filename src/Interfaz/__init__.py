@@ -1,1 +1,1 @@
-print("Interfaz esta lista para usarse.")
+print("Interfaz lista para usarse.")
