@@ -18,6 +18,9 @@ class SimulationController:
         self.current_state = "MENU" # Estados: "MENU", "SIMULATION"
         self.save_path = None
 
+        self.autosave_interval = None # Días entre autoguardados. None para desactivado.
+        self.days_since_last_autosave = 0
+
         self.animal_seleccionado = None
         self.pareja_seleccionada = None
         self.paused = True
@@ -56,6 +59,12 @@ class SimulationController:
             return True
         if self.ecosistema.hora_actual == 0:
             self._actualizar_grafico()
+            if self.autosave_interval:
+                self.days_since_last_autosave += 1
+                if self.days_since_last_autosave >= self.autosave_interval:
+                    print(f"Autoguardando partida... (Intervalo: {self.autosave_interval} días)")
+                    self._action_save()
+                    self.days_since_last_autosave = 0
         return False
 
     def _setup_button_actions(self):
@@ -211,6 +220,7 @@ class SimulationController:
                     user = command["user"]
                     save_file = command["save"] # Esto sigue siendo solo el nombre del archivo
                     self.save_path = os.path.join("saves", user, save_file)
+                    self.autosave_interval = command.get("autosave") # Obtener el intervalo de autoguardado
                     
                     load_successful = self._action_load()
                     

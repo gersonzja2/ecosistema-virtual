@@ -107,11 +107,14 @@ class Menu:
         self.selected_save = None
         self.input_text = ""
         self.input_active = False
+        self.autosave_options = [None, 10, 30, 50] # None para OFF
+        self.selected_autosave = None
+        self.autosave_rects = {}
 
         self.buttons = {
             "new_user": pygame.Rect(SIM_WIDTH + 50, 200, 300, 40),
             "new_save": pygame.Rect(SIM_WIDTH + 50, 450, 300, 40),
-            "start_game": pygame.Rect(SIM_WIDTH + 50, 550, 300, 50)
+            "start_game": pygame.Rect(SIM_WIDTH + 50, 600, 300, 50)
         }
 
     def handle_event(self, event):
@@ -135,6 +138,14 @@ class Menu:
                     self.selected_save = save_data["filename"]
                     return None
 
+            # Lógica para seleccionar autoguardado
+            for option, rect in self.autosave_rects.items():
+                if rect.collidepoint(event.pos):
+                    self.selected_autosave = option
+                    # No es necesario devolver un comando, solo actualizar el estado interno
+                    return None
+
+
             # Lógica para botones
             if self.buttons["new_user"].collidepoint(event.pos):
                 self.input_active = True
@@ -147,10 +158,10 @@ class Menu:
                 new_save_name = f"partida_{num_saves + 1}.json"
                 self.selected_save = new_save_name # Seleccionamos el nuevo nombre
                 # Devolvemos la información para que el controlador decida qué hacer
-                return {"type": "start_game", "user": self.selected_user, "save": self.selected_save}
+                return {"type": "start_game", "user": self.selected_user, "save": self.selected_save, "autosave": self.selected_autosave}
 
             if self.buttons["start_game"].collidepoint(event.pos) and self.selected_user and self.selected_save:
-                return {"type": "start_game", "user": self.selected_user, "save": self.selected_save}
+                return {"type": "start_game", "user": self.selected_user, "save": self.selected_save, "autosave": self.selected_autosave}
 
         if event.type == pygame.KEYDOWN and self.input_active:
             if event.key == pygame.K_RETURN:
@@ -219,6 +230,21 @@ class Menu:
             pygame.draw.rect(self.screen, COLOR_BUTTON, self.buttons["new_save"])
             new_save_surf = self.font_normal.render("Nueva Partida", True, COLOR_TEXT)
             self.screen.blit(new_save_surf, (self.buttons["new_save"].x + 10, self.buttons["new_save"].y + 10))
+
+        # Sección de Autoguardado
+        autosave_y_start = 520
+        self.screen.blit(self.font_normal.render("Autoguardado (días):", True, COLOR_TEXT), (SIM_WIDTH + 20, autosave_y_start))
+        
+        option_labels = {None: "OFF", 10: "10", 30: "30", 50: "50"}
+        option_x_start = SIM_WIDTH + 200
+        self.autosave_rects.clear()
+        for i, option in enumerate(self.autosave_options):
+            label = option_labels[option]
+            color = COLOR_SELECTED if self.selected_autosave == option else COLOR_TEXT
+            text_surf = self.font_normal.render(label, True, color)
+            text_rect = text_surf.get_rect(topleft=(option_x_start + i * 60, autosave_y_start))
+            self.screen.blit(text_surf, text_rect)
+            self.autosave_rects[option] = text_rect
 
         # Botón para Iniciar
         if self.selected_user and self.selected_save:
