@@ -1,5 +1,5 @@
 import pygame
-from .Constantes import SIM_WIDTH, SCREEN_HEIGHT, COLOR_BACKGROUND, COLOR_TEXT, COLOR_BUTTON, COLOR_SELECTED, UI_WIDTH, UI_WIDTH
+from .Constantes import SIM_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH, COLOR_BACKGROUND, COLOR_TEXT, COLOR_BUTTON, COLOR_SELECTED, UI_WIDTH
 
 class Menu:
     def __init__(self, screen, font_header, font_normal, font_small, users, saves_for_selected_user=None):
@@ -14,6 +14,25 @@ class Menu:
         self.selected_save_date = None
         self.input_text = ""
         self.input_active = False
+        self.scroll_x = 0
+        self.background_image = None
+        try:
+            # Cargar la imagen de fondo del menú
+            original_image = pygame.image.load("assets/fondo_menu.png").convert()
+            # Escalar la imagen para que su altura coincida con la de la pantalla
+            original_width, original_height = original_image.get_size()
+            aspect_ratio = original_width / original_height
+            scaled_height = SCREEN_HEIGHT
+            scaled_width = int(scaled_height * aspect_ratio)
+            scaled_image = pygame.transform.scale(original_image, (scaled_width, scaled_height))
+
+            # Crear una superficie el doble de ancha para el bucle de desplazamiento
+            self.background_image = pygame.Surface((scaled_width * 2, scaled_height))
+            self.background_image.blit(scaled_image, (0, 0))
+            self.background_image.blit(scaled_image, (scaled_width, 0))
+        except (pygame.error, FileNotFoundError):
+            print("Advertencia: No se pudo cargar la imagen de fondo del menú 'fondo_menu.png'. Se usará un color sólido.")
+            self.background_image = None
 
         self.buttons = {
             "new_user": pygame.Rect(SIM_WIDTH + 50, 200, 300, 40),
@@ -80,7 +99,21 @@ class Menu:
 
     def draw(self):
         """Dibuja el menú completo en la pantalla."""
-        self.screen.fill(COLOR_BACKGROUND)
+        if self.background_image:
+            # Ancho de una sola imagen (la mitad de la superficie total)
+            bg_width = self.background_image.get_width() // 2
+            
+            # Dibujar la superficie de fondo dos veces para el bucle
+            self.screen.blit(self.background_image, (self.scroll_x, 0))
+            
+            # Mover el fondo
+            self.scroll_x -= 0.2  # Velocidad de desplazamiento (ajusta este valor)
+            
+            # Si la imagen se ha desplazado completamente, reiniciar el scroll
+            if self.scroll_x <= -bg_width:
+                self.scroll_x = 0
+        else:
+            self.screen.fill(COLOR_BACKGROUND)
         
         # Título
         title_surf = self.font_header.render("Simulador de Ecosistema", True, COLOR_TEXT)
