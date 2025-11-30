@@ -1,0 +1,1 @@
+print("SoundBank listos para usar.")

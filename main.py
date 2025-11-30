@@ -1,201 +1,48 @@
 import pygame
-import time
-import random
-from model import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Animal
-from graph import PopulationGraph
-
-# --- Constantes para Pygame ---
-# Las constantes de la simulación (SIM_WIDTH, etc.) están ahora en model.py
-SCREEN_WIDTH = 1200
-SCREEN_HEIGHT = 700
-SIM_WIDTH = 800 # Área de la simulación
-UI_WIDTH = 400  # Área para la interfaz de texto
-
-COLOR_BACKGROUND = (22, 160, 133)
-COLOR_SIM_AREA = (46, 204, 113)
-COLOR_HERBIVORO = (255, 255, 255) # Blanco
-COLOR_CARNIVORO = (231, 76, 60)   # Rojo
-COLOR_OMNIVORO = (52, 152, 219)  # Azul
-COLOR_TEXT = (236, 240, 241)
-COLOR_MONTANA = (149, 165, 166) # Gris
-COLOR_RIO = (41, 128, 185)     # Azul oscuro
-COLOR_SELVA = (39, 174, 96)     # Verde oscuro
-COLOR_BUTTON = (26, 188, 156)
-
-# --- Clase para Botones ---
-
-class Button:
-    """Clase para crear botones clickeables en Pygame."""
-    def __init__(self, x, y, width, height, text, color, text_color):
-        self.rect = pygame.Rect(x, y, width, height)
-        self.text = text
-        self.color = color
-        self.text_color = text_color
-        self.font = pygame.font.SysFont("helvetica", 20)
-
-    def draw(self, surface):
-        pygame.draw.rect(surface, self.color, self.rect, border_radius=8)
-        text_surf = self.font.render(self.text, True, self.text_color)
-        text_rect = text_surf.get_rect(center=self.rect.center)
-        surface.blit(text_surf, text_rect)
-
-# --- Clase de la Vista (GUI con Pygame) ---
-
-class PygameView:
-    """Se encarga de mostrar la simulación en una ventana con Pygame."""
-    def __init__(self):
-        pygame.init()
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("Simulador de Ecosistema Virtual")
-        self.font_header = pygame.font.SysFont("helvetica", 24, bold=True)
-        self.font_normal = pygame.font.SysFont("consola", 16)
-        self.font_small = pygame.font.SysFont("consola", 14)
-        self.font_tiny = pygame.font.SysFont("consola", 12)
-        self.buttons = self._create_buttons()
-        self.sprites = self._load_sprites()
-        self.graph = PopulationGraph(SIM_WIDTH + 10, SCREEN_HEIGHT - 350, UI_WIDTH - 20, 120, self.font_small)
-
-    def _load_sprites(self):
-        """Carga las imágenes para los animales."""
-        try:
-            return {
-                "Herbivoro": pygame.transform.scale(pygame.image.load("assets/herbivoro.png"), (15, 15)),
-                "Carnivoro": pygame.transform.scale(pygame.image.load("assets/carnivoro.png"), (15, 15)),
-                "Omnivoro": pygame.transform.scale(pygame.image.load("assets/omnivoro.png"), (15, 15)),
-            }
-        except pygame.error as e:
-            print(f"Error al cargar sprites: {e}. Asegúrate de tener la carpeta 'assets' con las imágenes.")
-            return None
-
-    def _create_buttons(self):
-        """Crea los botones de la interfaz."""
-        buttons = {}
-        btn_width, btn_height = 180, 35
-        btn_x = SIM_WIDTH + (UI_WIDTH - btn_width) / 2
-        buttons["next_day"] = Button(btn_x, SCREEN_HEIGHT - 220, btn_width, btn_height, "Siguiente Día", COLOR_BUTTON, COLOR_TEXT)
-        buttons["add_herb"] = Button(btn_x, SCREEN_HEIGHT - 175, btn_width, btn_height, "Añadir Herbívoro", COLOR_HERBIVORO, (0,0,0))
-        buttons["add_carn"] = Button(btn_x, SCREEN_HEIGHT - 130, btn_width, btn_height, "Añadir Carnívoro", COLOR_CARNIVORO, COLOR_TEXT)
-        buttons["add_omni"] = Button(btn_x, SCREEN_HEIGHT - 85, btn_width, btn_height, "Añadir Omnívoro", COLOR_OMNIVORO, COLOR_TEXT)
-        buttons["save"] = Button(SIM_WIDTH + 10, SCREEN_HEIGHT - 40, 85, 30, "Guardar", (0, 100, 0), COLOR_TEXT)
-        buttons["load"] = Button(SIM_WIDTH + 105, SCREEN_HEIGHT - 40, 85, 30, "Cargar", (100, 100, 0), COLOR_TEXT)
-        return buttons
-
-    def _draw_text(self, text, font, color, surface, x, y):
-        textobj = font.render(text, 1, color)
-        textrect = textobj.get_rect()
-        textrect.topleft = (x, y)
-        surface.blit(textobj, textrect)
-
-    def draw_simulation(self, ecosistema, logs, sim_over, animal_seleccionado):
-        # 1. Dibujar fondos
-        self.screen.fill(COLOR_BACKGROUND)
-        pygame.draw.rect(self.screen, COLOR_SIM_AREA, (0, 0, SIM_WIDTH, SCREEN_HEIGHT))
-
-        # Dibujar terreno
-        for selva in ecosistema.terreno["selvas"]:
-            pygame.draw.rect(self.screen, COLOR_SELVA, selva.rect)
-        for montana in ecosistema.terreno["montanas"]:
-            pygame.draw.rect(self.screen, COLOR_MONTANA, montana.rect)
-        for rio in ecosistema.terreno["rios"]:
-            pygame.draw.rect(self.screen, COLOR_RIO, rio.rect)
-
-
-        # 2. Dibujar animales
-        if self.sprites:
-            for animal in ecosistema.animales:
-                sprite = self.sprites.get(animal.__class__.__name__)
-                if sprite:
-                    self.screen.blit(sprite, (animal.x - 7, animal.y - 7))
-        else: # Fallback a círculos si no hay sprites
-            for animal in ecosistema.animales:
-                color = COLOR_HERBIVORO
-                if isinstance(animal, Carnivoro): color = COLOR_CARNIVORO
-                elif isinstance(animal, Omnivoro): color = COLOR_OMNIVORO
-                pygame.draw.circle(self.screen, color, (animal.x, animal.y), 7)
-        
-        # Resaltar animal seleccionado
-        if animal_seleccionado:
-            pygame.draw.circle(self.screen, (255, 255, 0), (animal_seleccionado.x, animal_seleccionado.y), 10, 2)
-
-        # 3. Dibujar UI (panel de texto)
-        ui_x = SIM_WIDTH + 10
-        self._draw_text(f"DÍA: {ecosistema.dia_total}", self.font_header, COLOR_TEXT, self.screen, ui_x, 10)
-        
-        # Estado del ecosistema
-        y_offset = 45
-        self._draw_text(f"Estación: {ecosistema.estacion_actual}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
-        y_offset += 20
-        self._draw_text(f"Clima: {ecosistema.clima_actual}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
-        
-        # Panel de información / animal seleccionado
-        y_offset = 90
-        self._draw_text("--- INFO ---", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
-        y_offset += 25
-        if animal_seleccionado:
-            self._draw_text(f"Nombre: {animal_seleccionado.nombre}", self.font_small, COLOR_TEXT, self.screen, ui_x, y_offset)
-            y_offset += 15
-            self._draw_text(f"Tipo: {animal_seleccionado.__class__.__name__}", self.font_small, COLOR_TEXT, self.screen, ui_x, y_offset)
-            y_offset += 15
-            self._draw_text(f"Energía: {animal_seleccionado.energia}/{animal_seleccionado.genes['max_energia']}", self.font_small, COLOR_TEXT, self.screen, ui_x, y_offset)
-            y_offset += 15
-            self._draw_text(f"Sed: {animal_seleccionado._sed}", self.font_small, COLOR_TEXT, self.screen, ui_x, y_offset)
-            y_offset += 15
-            self._draw_text(f"Edad: {animal_seleccionado.edad}", self.font_small, COLOR_TEXT, self.screen, ui_x, y_offset)
-            y_offset += 20
-            self._draw_text(f"GENES:", self.font_tiny, COLOR_TEXT, self.screen, ui_x, y_offset)
-            y_offset += 12
-            self._draw_text(f" Visión: {animal_seleccionado.genes['rango_vision']}", self.font_tiny, COLOR_TEXT, self.screen, ui_x, y_offset)
-        else:
-            self._draw_text(f"Animales: {len(ecosistema.animales)}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
-            y_offset += 20
-            self._draw_text(f"Hierba: {ecosistema.recursos['hierba']}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
-            y_offset += 20
-            bayas_totales = sum(s.bayas for s in ecosistema.terreno["selvas"])
-            self._draw_text(f"Bayas: {bayas_totales}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
-            y_offset += 20
-            self._draw_text("Haz clic en un animal", self.font_small, COLOR_TEXT, self.screen, ui_x, y_offset)
-            y_offset += 15
-            self._draw_text("para ver sus detalles.", self.font_small, COLOR_TEXT, self.screen, ui_x, y_offset)
-
-        # Dibujar gráfico
-        self.graph.draw(self.screen)
-
-        # 4. Dibujar botones
-        if not sim_over:
-            for button in self.buttons.values():
-                button.draw(self.screen)
-        
-        # Instrucciones
-        self._draw_text("ESC para salir", self.font_small, COLOR_TEXT, self.screen, 10, SCREEN_HEIGHT - 25)
-        
-        # 4. Actualizar la pantalla
-        pygame.display.flip()
-
-    def close(self):
-        pygame.quit()
+import os
+from src.Logica.Logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto
+from src.Interfaz.Interfaz import PygameView, Menu
+import src.Persistencia.Persistencia as persistencia # Importamos el nuevo módulo
 
 class SimulationController:
-    """Controla el flujo de la simulación, conectando el Modelo y la Vista."""
     def __init__(self, dias_simulacion: int):
-        self.ecosistema = Ecosistema()
+        pygame.init()  # Asegurar que pygame está inicializado
         self.view = PygameView()
+        self.ecosistema = Ecosistema()
         self.dias_simulacion = dias_simulacion
-        self.logs = ["¡Bienvenido! Pulsa 'Siguiente Día' para empezar."]
+        
+        # El controlador ahora es responsable de obtener los datos para el menú
+        users = persistencia.obtener_lista_usuarios()
+        self.menu = Menu(self.view.screen, self.view.font_header, self.view.font_normal, self.view.font_small, users)
+        
+        self.current_state = "MENU" # Estados: "MENU", "SIMULATION"
+        self.save_path = None
+
         self.animal_seleccionado = None
+        self.pareja_seleccionada = None
+        self.paused = True
+        
+        self.sim_speed_multiplier = 3
+        self.base_time_per_hour = 50 # Ralentizamos un poco para mejor visualización
+        self.last_update_time = pygame.time.get_ticks()
+        self.clock = pygame.time.Clock()
 
     def _poblar_ecosistema(self):
-        """Método privado para añadir los animales iniciales."""
-        self.ecosistema.agregar_animal(Herbivoro, "Conejo 1")
-        self.ecosistema.agregar_animal(Herbivoro, "Ciervo 1")
-        self.ecosistema.agregar_animal(Carnivoro, "Lobo 1")
-        self.ecosistema.agregar_animal(Omnivoro, "Oso 1")
-        self.ecosistema.agregar_animal(Herbivoro, "Conejo 2")
+        tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto]
+        for tipo in tipos_de_animales:
+            for _ in range(2):
+                self.ecosistema.agregar_animal(tipo)
 
     def _avanzar_dia(self):
-        """Avanza un día en la simulación."""
-        self.logs = self.ecosistema.simular_dia()
+        for _ in range(24):
+            self.ecosistema.simular_hora()
+            if self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales:
+                return True
         
-        # Actualizar gráfico
+        self._actualizar_grafico()
+        return self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales
+    
+    def _actualizar_grafico(self):
         poblaciones = (
             sum(1 for a in self.ecosistema.animales if isinstance(a, Herbivoro)),
             sum(1 for a in self.ecosistema.animales if isinstance(a, Carnivoro)),
@@ -203,67 +50,208 @@ class SimulationController:
         )
         self.view.graph.update(poblaciones)
 
+    def _avanzar_hora(self):
+        self.ecosistema.simular_hora()
         if self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales:
-            self.logs.append("--- SIMULACIÓN FINALIZADA ---")
-            return True # La simulación ha terminado
-        return False # La simulación continúa
+            return True
+        if self.ecosistema.hora_actual == 0:
+            self._actualizar_grafico()
+        return False
 
+    def _setup_button_actions(self):
+        animal_map = {
+            "conejo": Conejo, "raton": Raton, "cabra": Cabra,
+            "leopardo": Leopardo, "gato": Gato, "halcon": Halcon,
+            "cerdo": Cerdo, "mono": Mono, "insecto": Insecto
+        }
+
+        self.button_actions = {
+            "save": self._action_save,
+            "load": self._action_load,
+            "music": self.view.toggle_music,
+            "pause_resume": self._action_toggle_pause,
+            "next_day": self._action_advance_day,
+            "restart": self._action_restart,
+            "feed_herbivores": self._action_feed_all_herbivores,
+            "force_reproduce": self._action_force_reproduce,
+            "hunt": self._action_toggle_hunt_mode
+        }
+
+        # Mapeo dinámico para los botones de "añadir animal"
+        for name, cls in animal_map.items():
+            self.button_actions[f"add_{name}"] = lambda species=cls: self.ecosistema.agregar_animal(species)
+        
+    def _action_save(self):
+        """Utiliza la clase Persistencia para guardar el estado del ecosistema."""
+        if self.save_path:
+            persistencia.guardar_partida(self.ecosistema, self.save_path)
+        else:
+            print("Error: No hay una ruta de guardado definida.")
+
+    def _action_load(self):
+        """Utiliza la clase Persistencia para cargar el estado del ecosistema."""
+        if self.save_path:
+            loaded_ecosystem = persistencia.cargar_partida(self.save_path)
+            if loaded_ecosystem:
+                self.ecosistema = loaded_ecosystem
+                self.view.graph.history.clear()
+                self.view.needs_static_redraw = True
+            else:
+                # If loading fails or file doesn't exist, create a new ecosystem
+                self.ecosistema = Ecosistema()
+
+    def _action_restart(self):
+        self.ecosistema = Ecosistema()
+        self._poblar_ecosistema()
+        self.view.graph.history.clear()
+        self.animal_seleccionado = None
+        self.pareja_seleccionada = None
+        self.view.needs_static_redraw = True
+        self.paused = True
+        # No es necesario reiniciar sim_over aquí, ya que se gestiona en el bucle principal.
+        print("Simulación reiniciada a su estado inicial.")
+    def _action_toggle_pause(self): self.paused = not self.paused
+    def _action_advance_day(self):
+        if self.ecosistema.dia_total < self.dias_simulacion and self.ecosistema.animales:
+            return self._avanzar_dia()
+        return True
+    
+    def _action_feed_all_herbivores(self):
+        """Da la orden de comer a todos los herbívoros y omnívoros con baja energía."""
+        print("Dando orden de comer a herbívoros y omnívoros hambrientos...")
+        for animal in self.ecosistema.animales:
+            if not isinstance(animal, Carnivoro) and (animal.energia / animal.max_energia) < 0.8:
+                animal.buscar_comida(forzado=True)
+
+    def _action_toggle_hunt_mode(self):
+        """Activa o desactiva el modo de caza para carnívoros."""
+        self.ecosistema.activar_modo_caza_carnivoro()
+        # Actualizar texto del botón
+        if self.ecosistema.modo_caza_carnivoro_activo:
+            self.view.buttons["hunt"].text = "Regresar Carnívoros"
+        else:
+            self.view.buttons["hunt"].text = "Cazar Herbívoros"
+
+    def _action_force_reproduce(self):
+        if self.animal_seleccionado and self.pareja_seleccionada:
+            # Asegurarse de que son de la misma especie antes de intentar la reproducción
+            if type(self.animal_seleccionado) == type(self.pareja_seleccionada):
+                self.animal_seleccionado.buscar_pareja_para_reproducir(self.pareja_seleccionada)
+            else:
+                print(f"Error: {self.animal_seleccionado.nombre} y {self.pareja_seleccionada.nombre} no son de la misma especie y no pueden reproducirse.")
+
+    def _action_select_animal_at(self, pos):
+        """Selecciona un animal en la posición dada o deselecciona si se hace clic en un espacio vacío."""
+        animal_clicado = self.ecosistema.get_animal_at(pos)
+        
+        if not animal_clicado:
+            # Si se hace clic en espacio vacío, se deselecciona todo.
+            self.animal_seleccionado = None
+            self.pareja_seleccionada = None
+        elif not self.animal_seleccionado or self.animal_seleccionado == animal_clicado:
+            # Seleccionar el animal principal (o deseleccionar la pareja si se vuelve a clicar)
+            # Si se vuelve a hacer clic en el animal ya seleccionado, se deselecciona la pareja.
+            self.animal_seleccionado = animal_clicado
+            self.pareja_seleccionada = None
+        else:
+            # Si ya hay un animal seleccionado y se clica en otro diferente, se selecciona como pareja.
+            self.pareja_seleccionada = animal_clicado
 
     def run(self):
-        """Bucle principal de la simulación con Pygame."""
-        self._poblar_ecosistema()
-        
         running = True
         sim_over = False
+        self._setup_button_actions()
+
         while running:
-            # Manejo de eventos de Pygame
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        running = False
-                if event.type == pygame.MOUSEBUTTONDOWN and not sim_over:
-                    pos = pygame.mouse.get_pos()
-                    if self.view.buttons["next_day"].rect.collidepoint(pos):
-                        sim_over = self._avanzar_dia()
-                        if self.animal_seleccionado and not self.animal_seleccionado.esta_vivo:
-                            self.animal_seleccionado = None
-                    elif self.view.buttons["add_herb"].rect.collidepoint(pos):
-                        self.ecosistema.agregar_animal(Herbivoro)
-                    elif self.view.buttons["add_carn"].rect.collidepoint(pos):
-                        self.ecosistema.agregar_animal(Carnivoro)
-                    elif self.view.buttons["add_omni"].rect.collidepoint(pos):
-                        self.ecosistema.agregar_animal(Omnivoro)
-                    elif self.view.buttons["save"].rect.collidepoint(pos):
-                        self.ecosistema.guardar_estado()
-                        self.logs.append("¡Partida guardada!")
-                    elif self.view.buttons["load"].rect.collidepoint(pos):
-                        try:
-                            self.ecosistema.cargar_estado()
-                            self.view.graph.history = [] # Resetear gráfico
-                            self.logs.append("¡Partida cargada!")
-                        except FileNotFoundError:
-                            self.logs.append("¡No se encontró guardado!")
-                    else:
-                        # Comprobar si se hizo clic en un animal
-                        self.animal_seleccionado = None
-                        for animal in reversed(self.ecosistema.animales):
-                            dist = (animal.x - pos[0])**2 + (animal.y - pos[1])**2
-                            if dist < 10**2: # Si el clic está dentro del radio del animal
-                                self.animal_seleccionado = animal
-                                break
+            self.clock.tick(60)  # Mantener 60 FPS constantes
+            
+            if self.current_state == "MENU":
+                self.menu.draw()
+                running = self.handle_menu_events()
+            
+            elif self.current_state == "SIMULATION":
+                current_time = pygame.time.get_ticks()
+                delta_time = current_time - self.last_update_time
 
-            # Dibujar todo
-            self.view.draw_simulation(self.ecosistema, self.logs, sim_over, self.animal_seleccionado)
+                if not self.paused and not sim_over and delta_time > self.base_time_per_hour / self.sim_speed_multiplier:
+                    sim_over = self._avanzar_hora()
+                    self.last_update_time = current_time
+                    
+                running, sim_over = self.handle_simulation_events(running, sim_over)
 
+                self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier)
+    
         self.view.close()
 
-# --- Ejecución Principal ---
+    def handle_menu_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                return False
+            
+            command = self.menu.handle_event(event)
+            if command:
+                command_type = command.get("type")
+
+                if command_type == "create_user":
+                    username = command["username"]
+                    persistencia.crear_usuario(username)
+                    self.menu.users = persistencia.obtener_lista_usuarios()
+                    self.menu.selected_user = username
+                    self.menu.saves = persistencia.obtener_partidas_usuario(username)
+
+                elif command_type == "select_user":
+                    username = command["username"]
+                    self.menu.saves = persistencia.obtener_partidas_usuario(username)
+
+                elif command_type == "start_game":
+                    user = command["user"]
+                    save_file = command["save"]
+                    self.save_path = os.path.join("saves", user, save_file)
+                    
+                    self._action_load()
+                    
+                    if not self.ecosistema.animales:
+                        print("Creando un nuevo mundo y poblándolo con animales.")
+                        self._poblar_ecosistema()
+
+                    self.current_state = "SIMULATION"
+        return True
+
+    def handle_simulation_events(self, running, sim_over):
+        for event in pygame.event.get():
+            # La vista procesa el evento y devuelve un comando de alto nivel
+            command = self.view.handle_event(event, self.ecosistema, self.animal_seleccionado)
+
+            if not command:
+                continue
+
+            command_type = command.get("type")
+
+            if command_type == "quit":
+                # Si el usuario cierra la ventana durante la simulación
+                if event.type == pygame.QUIT:
+                    running = False # Termina el bucle principal
+                    break
+                self._action_save() # Guardar al salir
+                self.current_state = "MENU" # Volver al menú
+            elif command_type == "toggle_music":
+                self.view.toggle_music()
+            elif command_type == "click_simulation_area" and not sim_over:
+                self._action_select_animal_at(command["pos"])
+            elif command_type and command_type.startswith("click_button_") and not sim_over:
+                button_name = command_type.replace("click_button_", "")
+                action = self.button_actions.get(button_name)
+                if action:
+                    print(f"DEBUG: Controller executing action for button '{button_name}'")
+                    result = action()
+                    # Si la acción fue avanzar el día, actualizamos el estado de sim_over
+                    if button_name == "next_day" and result:
+                        sim_over = True
+
+        return running, sim_over
 
 def main():
-    """Función principal para ejecutar la simulación."""
-    controlador = SimulationController(dias_simulacion=200) # Puedes ajustar el total de días
+    controlador = SimulationController(dias_simulacion=200)
     controlador.run()
 
 if __name__ == "__main__":
