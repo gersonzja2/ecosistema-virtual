@@ -7,7 +7,7 @@ from ..Logica.Logica import Ecosistema
 # Versión actual del simulador. Cambiar si la estructura de guardado se modifica.
 SIMULATOR_VERSION = "1.0"
 
-def guardar_partida(ecosistema: Ecosistema, ruta_archivo: str):
+def guardar_partida(ecosistema: Ecosistema, ruta_archivo: str, autosave=False):
     """
     Guarda el estado del ecosistema de forma segura (atómica).
     1. Crea un backup del archivo de guardado existente.
@@ -42,7 +42,11 @@ def guardar_partida(ecosistema: Ecosistema, ruta_archivo: str):
         # En sistemas POSIX, os.rename es atómico. En Windows, puede fallar si el destino existe.
         # shutil.move es una alternativa más portable y robusta.
         shutil.move(ruta_temporal, ruta_archivo)
-        print(f"Partida guardada exitosamente en: {ruta_archivo}")
+        
+        if not autosave:
+            # Solo mostramos el mensaje de guardado exitoso para guardados manuales,
+            # el autoguardado ya imprime su propio mensaje desde el controlador.
+            print(f"Partida guardada exitosamente en: {ruta_archivo}")
 
     except (IOError, OSError, json.JSONDecodeError) as e:
         print(f"Error al guardar la partida: {e}")

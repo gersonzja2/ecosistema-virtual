@@ -485,16 +485,14 @@ class PygameView:
         self.screen.blit(input_surf, (input_rect.x + 10, input_rect.y + 10))
 
         # Lista de partidas existentes para sobrescribir
+        save_slot_rects = self.get_save_slot_rects(save_slots)
         self._draw_text("O selecciona una para sobrescribir:", self.font_small, COLOR_TEXT, self.screen, panel_rect.x + 20, panel_rect.y + 130)
-        save_y_start = panel_rect.y + 160
-        for i, save in enumerate(save_slots):
-            # 'save' es un diccionario: {'filename': '...', 'metadata': ...}
-            # 'selected_save' es un string: 'partida_1.json'
+        for i, save_rect in enumerate(save_slot_rects):
+            save = save_slots[i]
             filename = save.get("filename", "")
             color = COLOR_SELECTED if filename == selected_save else COLOR_TEXT
             save_name = filename.replace(".json", "").replace("_", " ").capitalize()
             save_surf = self.font_normal.render(save_name, True, color)
-            save_rect = save_surf.get_rect(topleft=(panel_rect.x + 20, save_y_start + i * 35))
             self.screen.blit(save_surf, save_rect)
 
         # Instrucciones
@@ -502,6 +500,15 @@ class PygameView:
         self._draw_text("Presiona ESC para cancelar.", self.font_small, COLOR_TEXT, self.screen, panel_rect.x + 20, panel_rect.bottom - 30)
 
         pygame.display.flip()
+
+    def get_save_slot_rects(self, save_slots):
+        """Calcula y devuelve los rectángulos para cada slot de guardado en el menú 'Guardar como...'."""
+        rects = []
+        panel_x_start = 150 + 20
+        save_y_start = 150 + 160
+        for i, _ in enumerate(save_slots):
+            rects.append(pygame.Rect(panel_x_start, save_y_start + i * 35, 460, 30))
+        return rects
 
     def close(self):
         try:

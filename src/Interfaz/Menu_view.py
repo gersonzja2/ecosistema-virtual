@@ -14,15 +14,49 @@ class Menu:
         self.selected_save_date = None
         self.input_text = ""
         self.input_active = False
+        self.autosave_options = [None, 10, 30, 50] # None significa Desactivado
+        self.current_autosave_index = 0
 
         self.buttons = {
             "new_user": pygame.Rect(SIM_WIDTH + 50, 200, 300, 40),
             "new_save": pygame.Rect(SIM_WIDTH + 50, 450, 300, 40),
+            "autosave": pygame.Rect(SIM_WIDTH + 50, 500, 300, 40),
             "start_game": pygame.Rect(SIM_WIDTH + 50, 550, 300, 50)
         }
 
     def handle_event(self, event):
         """Maneja los eventos de Pygame para el menú."""
+        if event.type == pygame.KEYDOWN and self.input_active:
+            if event.key == pygame.K_RETURN:
+                if self.input_text:
+                    username = self.input_text
+                    self.input_active = False
+                    self.input_text = ""
+                    return {"type": "create_user", "username": username}
+            elif event.key == pygame.K_BACKSPACE:
+                self.input_text = self.input_text[:-1]
+            else:
+                self.input_text += event.unicode
+            return None # El evento de teclado ha sido manejado
+
+        if event.type != pygame.MOUSEBUTTONDOWN:
+            return None
+
+        # Lógica para botones que están siempre visibles o se activan con estados
+        if self.buttons["new_user"].collidepoint(event.pos):
+            self.input_active = True
+            self.input_text = ""
+            return None
+
+        if self.buttons["start_game"].collidepoint(event.pos) and self.selected_user and self.selected_save:
+            return {
+                "type": "start_game",
+                "user": self.selected_user,
+                "save": self.selected_save,
+                "autosave": self.autosave_options[self.current_autosave_index],
+            }
+
+        # Lógica para elementos que aparecen después de seleccionar un usuario
         if event.type == pygame.MOUSEBUTTONDOWN:
             # Lógica para seleccionar usuarios
             user_y_start = 100
@@ -33,7 +67,7 @@ class Menu:
                     self.selected_save = None
                     self.selected_save_date = None
                     self.rename_active = False
-                    self.input_save_active = False # Resetear input de guardado
+                    self.input_save_active = False  # Resetear input de guardado
                     # Devuelve una solicitud para que el controlador cargue las partidas de este usuario
                     return {"type": "select_user", "username": user}
 
@@ -47,34 +81,18 @@ class Menu:
                     # Solicitar al controlador que obtenga la fecha de esta partida
                     return {"type": "select_save", "user": self.selected_user, "save": self.selected_save}
 
-            # Lógica para botones
-            if self.buttons["new_user"].collidepoint(event.pos):
-                self.input_active = True
-                self.input_text = ""
-                return None
-            
-            if self.buttons["new_save"].collidepoint(event.pos) and self.selected_user:
-                # Crear una nueva partida (se guardará al salir de la simulación)
-                num_saves = len(self.saves)
-                new_save_name = f"partida_{num_saves + 1}.json"
-                self.selected_save = new_save_name # Seleccionamos el nuevo nombre
-                # Devolvemos la información para que el controlador cree la referencia
-                return {"type": "create_save", "user": self.selected_user, "save": new_save_name}
+            # Lógica para botones que dependen de self.selected_user
+            if self.selected_user:
+                if self.buttons["new_save"].collidepoint(event.pos):
+                    num_saves = len(self.saves)
+                    new_save_name = f"partida_{num_saves + 1}.json"
+                    self.selected_save = new_save_name
+                    return {"type": "create_save", "user": self.selected_user, "save": new_save_name}
 
-            if self.buttons["start_game"].collidepoint(event.pos) and self.selected_user and self.selected_save:
-                return {"type": "start_game", "user": self.selected_user, "save": self.selected_save}
-
-        if event.type == pygame.KEYDOWN and self.input_active:
-            if event.key == pygame.K_RETURN:
-                if self.input_text:
-                    username = self.input_text
-                    self.input_active = False
-                    self.input_text = ""
-                    return {"type": "create_user", "username": username}
-            elif event.key == pygame.K_BACKSPACE:
-                self.input_text = self.input_text[:-1]
-            else:
-                self.input_text += event.unicode
+                if self.buttons["autosave"].collidepoint(event.pos):
+                    # Cambia el índice y devuelve un comando para que el controlador se entere.
+                    self.current_autosave_index = (self.current_autosave_index + 1) % len(self.autosave_options)
+                    return {"type": "set_autosave", "interval": self.autosave_options[self.current_autosave_index]}
         
         return None
 
@@ -124,12 +142,22 @@ class Menu:
                     date_surf = self.font_small.render(f"Guardado: {date_str}", True, COLOR_TEXT)
                     self.screen.blit(date_surf, (SIM_WIDTH + 50, 420))
                 except (ValueError, ImportError):
-                    pass # Si hay error en el formato, simplemente no se muestra.
-            
+                    pass  # Si hay error en el formato, simplemente no se muestra.
+
             # Botón para nueva partida
             pygame.draw.rect(self.screen, COLOR_BUTTON, self.buttons["new_save"])
             new_save_surf = self.font_normal.render("Nueva Partida", True, COLOR_TEXT)
             self.screen.blit(new_save_surf, (self.buttons["new_save"].x + 10, self.buttons["new_save"].y + 10))
+
+            # Botón para Autoguardado
+            pygame.draw.rect(self.screen, COLOR_BUTTON, self.buttons["autosave"])
+            autosave_value = self.autosave_options[self.current_autosave_index]
+            if autosave_value is None:
+                autosave_text = "Autoguardado: Desactivado"
+            else:
+                autosave_text = f"Autoguardado: Cada {autosave_value} días"
+            autosave_surf = self.font_normal.render(autosave_text, True, COLOR_TEXT)
+            self.screen.blit(autosave_surf, (self.buttons["autosave"].x + 10, self.buttons["autosave"].y + 10))
 
         # Botón para Iniciar
         if self.selected_user and self.selected_save:
