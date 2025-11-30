@@ -1,10 +1,11 @@
 import pygame
 import math
 import random
-from src.Logica.Terrenos.Terrenos import Rio, Selva, Pradera, Pez, Carcasa
+from datetime import datetime
+from .Terrenos.Terrenos import Rio, Selva, Pradera, Pez, Carcasa
 import src.Logica.Terrenos.Terrenos as Terrenos
-from src.Logica.Animales.Animal import Animal, CELL_SIZE, SCREEN_HEIGHT, BORDE_MARGEN, SIM_WIDTH
-from src.Logica.Animales.animales import Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto, Herbivoro, Carnivoro, Omnivoro
+from .Animales.Animal import Animal, CELL_SIZE, SCREEN_HEIGHT, BORDE_MARGEN, SIM_WIDTH
+from .Animales.animales import Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto, Herbivoro, Carnivoro, Omnivoro
 
 
 class Ecosistema:
@@ -407,6 +408,7 @@ class Ecosistema:
     def to_dict(self):
         """Convierte el estado del ecosistema a un diccionario serializable."""
         return {
+            "fecha_guardado": datetime.now().isoformat(),
             "dia_total": self.dia_total,
             "hora_actual": self.hora_actual,
             "grid_hierba": self.grid_hierba,
