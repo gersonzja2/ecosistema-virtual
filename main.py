@@ -251,6 +251,8 @@ class SimulationController:
         return running, sim_over
 
 def main():
+    # Limpiar archivos temporales de sesiones anteriores antes de empezar
+    persistencia.limpiar_archivos_temporales_antiguos()
     controlador = SimulationController(dias_simulacion=200)
     controlador.run()
 

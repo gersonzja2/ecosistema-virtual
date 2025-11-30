@@ -3,9 +3,13 @@ import os
 import shutil
 from ..Logica.Logica import Ecosistema
 
+# Versión actual del simulador. Cambiar si la estructura de guardado se modifica.
+SIMULATOR_VERSION = "1.0"
+
 def guardar_partida(ecosistema: Ecosistema, ruta_archivo: str):
     """
     Guarda el estado del ecosistema de forma segura (atómica).
+    1. Crea un backup del archivo de guardado existente.
     1. Guarda en un archivo temporal.
     2. Si tiene éxito, reemplaza el archivo de guardado original.
     """
@@ -17,22 +21,30 @@ def guardar_partida(ecosistema: Ecosistema, ruta_archivo: str):
         os.makedirs(directorio)
 
     try:
-        # 1. Escribir en el archivo temporal
+        # 1. Crear un backup del archivo de guardado existente antes de sobrescribir.
+        if os.path.exists(ruta_archivo):
+            shutil.copy2(ruta_archivo, ruta_respaldo)
+            print(f"Copia de seguridad creada en {ruta_respaldo}")
+
+        # 2. Escribir en el archivo temporal
         with open(ruta_temporal, 'w', encoding='utf-8') as f:
             datos = ecosistema.to_dict()
+            datos['simulator_version'] = SIMULATOR_VERSION # Añadir la versión al guardar
             json.dump(datos, f, indent=2, ensure_ascii=False)
 
-        # 2. Reemplazar el archivo original con el temporal de forma atómica
+        # 3. Reemplazar el archivo original con el temporal de forma atómica
         # En sistemas POSIX, os.rename es atómico. En Windows, puede fallar si el destino existe.
         # shutil.move es una alternativa más portable y robusta.
         shutil.move(ruta_temporal, ruta_archivo)
-        print(f"Partida guardada exitosamente en {ruta_archivo}")
+        print(f"Partida guardada exitosamente en: {ruta_archivo}")
 
     except (IOError, OSError, json.JSONDecodeError) as e:
         print(f"Error al guardar la partida: {e}")
+    finally:
         # Si el archivo temporal aún existe, lo eliminamos para no dejar basura.
         if os.path.exists(ruta_temporal):
             os.remove(ruta_temporal)
+            print(f"Archivo temporal limpiado: {ruta_temporal}")
 
 def cargar_partida(ruta_archivo: str) -> Ecosistema:
     """
@@ -51,6 +63,16 @@ def cargar_partida(ruta_archivo: str) -> Ecosistema:
     try:
         with open(ruta_archivo, 'r', encoding='utf-8') as f:
             datos = json.load(f)
+            
+            # Validación de versión
+            version_guardado = datos.get("simulator_version")
+            if version_guardado != SIMULATOR_VERSION:
+                print(f"Error: El archivo de guardado es de una versión incompatible.")
+                print(f"  Versión del guardado: {version_guardado or 'Desconocida'}")
+                print(f"  Versión del simulador: {SIMULATOR_VERSION}")
+                print("  No se puede cargar la partida para evitar errores.")
+                return None
+
             return Ecosistema.from_dict(datos)
     except (json.JSONDecodeError, IOError) as e:
         print(f"Error al cargar la partida desde {ruta_archivo}: {e}. Se devolverá None.")
@@ -79,3 +101,21 @@ def crear_usuario(username: str):
         os.makedirs(user_path)
         # La confirmación al usuario debe ser manejada por la capa de Vista,
         # a petición de la Lógica.
+
+def limpiar_archivos_temporales_antiguos(directorio_saves="saves"):
+    """
+    Busca y elimina archivos temporales (.tmp) en el directorio de guardado y sus subdirectorios.
+    Ideal para ejecutar al inicio de la aplicación.
+    """
+    if not os.path.exists(directorio_saves):
+        return
+
+    for root, _, files in os.walk(directorio_saves):
+        for file in files:
+            if file.endswith(".tmp"):
+                ruta_completa = os.path.join(root, file)
+                print(f"Limpiando archivo temporal antiguo: {ruta_completa}")
+                try:
+                    os.remove(ruta_completa)
+                except OSError as e:
+                    print(f"Error al eliminar archivo temporal {ruta_completa}: {e}")
