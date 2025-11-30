@@ -1,6 +1,7 @@
 import pygame
 import math
 import random
+from datetime import datetime
 from .Terrenos.Terrenos import Rio, Selva, Pradera, Pez, Carcasa
 import src.Logica.Terrenos.Terrenos as Terrenos
 from .Animales.Animal import Animal, CELL_SIZE, SCREEN_HEIGHT, BORDE_MARGEN, SIM_WIDTH
@@ -407,6 +408,7 @@ class Ecosistema:
     def to_dict(self):
         """Convierte el estado del ecosistema a un diccionario serializable."""
         return {
+            "fecha_guardado": datetime.now().isoformat(),
             "dia_total": self.dia_total,
             "hora_actual": self.hora_actual,
             "grid_hierba": self.grid_hierba,

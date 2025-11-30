@@ -11,6 +11,7 @@ class Menu:
         self.saves = saves_for_selected_user or []
         self.selected_user = None
         self.selected_save = None
+        self.selected_save_date = None
         self.input_text = ""
         self.input_active = False
 
@@ -30,6 +31,9 @@ class Menu:
                 if user_rect.collidepoint(event.pos):
                     self.selected_user = user
                     self.selected_save = None
+                    self.selected_save_date = None
+                    self.rename_active = False
+                    self.input_save_active = False # Resetear input de guardado
                     # Devuelve una solicitud para que el controlador cargue las partidas de este usuario
                     return {"type": "select_user", "username": user}
 
@@ -38,8 +42,10 @@ class Menu:
             for i, save in enumerate(self.saves or []):
                 save_rect = pygame.Rect(SIM_WIDTH + 50, save_y_start + i * 30, 300, 30)
                 if save_rect.collidepoint(event.pos):
-                    self.selected_save = save["filename"]
-                    return None
+                    self.selected_save = save.get("filename")
+                    self.rename_active = False
+                    # Solicitar al controlador que obtenga la fecha de esta partida
+                    return {"type": "select_save", "user": self.selected_user, "save": self.selected_save}
 
             # Lógica para botones
             if self.buttons["new_user"].collidepoint(event.pos):
@@ -52,8 +58,8 @@ class Menu:
                 num_saves = len(self.saves)
                 new_save_name = f"partida_{num_saves + 1}.json"
                 self.selected_save = new_save_name # Seleccionamos el nuevo nombre
-                # Devolvemos la información para que el controlador decida qué hacer
-                return {"type": "start_game", "user": self.selected_user, "save": self.selected_save}
+                # Devolvemos la información para que el controlador cree la referencia
+                return {"type": "create_save", "user": self.selected_user, "save": new_save_name}
 
             if self.buttons["start_game"].collidepoint(event.pos) and self.selected_user and self.selected_save:
                 return {"type": "start_game", "user": self.selected_user, "save": self.selected_save}
@@ -108,6 +114,17 @@ class Menu:
                 save_name = save["filename"].replace(".json", "").replace("_", " ").capitalize()
                 save_surf = self.font_normal.render(save_name, True, color)
                 self.screen.blit(save_surf, (SIM_WIDTH + 50, save_y_start + i * 30))
+
+            # Mostrar fecha de la partida seleccionada
+            if self.selected_save and self.selected_save_date:
+                try:
+                    from datetime import datetime
+                    date_obj = datetime.fromisoformat(self.selected_save_date)
+                    date_str = date_obj.strftime("%d/%m/%Y - %H:%M:%S")
+                    date_surf = self.font_small.render(f"Guardado: {date_str}", True, COLOR_TEXT)
+                    self.screen.blit(date_surf, (SIM_WIDTH + 50, 420))
+                except (ValueError, ImportError):
+                    pass # Si hay error en el formato, simplemente no se muestra.
             
             # Botón para nueva partida
             pygame.draw.rect(self.screen, COLOR_BUTTON, self.buttons["new_save"])

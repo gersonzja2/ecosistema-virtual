@@ -135,6 +135,17 @@ class SimulationController:
         self.save_menu_saves = persistencia.obtener_partidas_usuario(self.current_user)
         self.save_menu_input = ""
 
+        # Asegurarse de que la partida actual (especialmente si es nueva) esté en la lista para ser mostrada.
+        current_save_name = os.path.basename(self.save_path) if self.save_path else None
+        # Comprobar si el nombre de archivo ya existe en la lista de diccionarios
+        if current_save_name and not any(d.get('filename') == current_save_name for d in self.save_menu_saves):
+            # Si la partida actual no está en la lista (porque es nueva y no se ha guardado), la añadimos.
+            # La añadimos como un diccionario para mantener la consistencia de la lista.
+            self.save_menu_saves.append({'filename': current_save_name, 'metadata': None})
+
+        # Ordenar la lista de diccionarios por el 'filename'
+        self.save_menu_saves.sort(key=lambda x: x.get('filename', ''))
+        
         # Pre-seleccionar la partida actual en el menú de "Guardar como..."
         if self.save_path:
             self.save_menu_selected = os.path.basename(self.save_path)
@@ -253,6 +264,20 @@ class SimulationController:
                 elif command_type == "select_user":
                     username = command["username"]
                     self.menu.saves = persistencia.obtener_partidas_usuario(username)
+
+                elif command_type == "create_save":
+                    # Este comando solo crea la referencia en el menú, no inicia el juego
+                    new_save_info = {"filename": command["save"], "metadata": None}
+                    if not any(s['filename'] == new_save_info['filename'] for s in self.menu.saves):
+                        self.menu.saves.append(new_save_info)
+                        self.menu.selected_save = command["save"]
+
+                elif command_type == "select_save":
+                    user = command["user"]
+                    save_file = command["save"]
+                    save_path = os.path.join("saves", user, save_file)
+                    date = persistencia.obtener_fecha_guardado(save_path)
+                    self.menu.selected_save_date = date
 
                 elif command_type == "start_game":
                     user = command["user"]
