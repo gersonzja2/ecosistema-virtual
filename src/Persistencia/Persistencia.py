@@ -183,7 +183,7 @@ def obtener_info_poblacion(ruta_archivo: str) -> tuple:
     try:
         with open(ruta_archivo, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            animales = data.get("cantidad_animales")
+            animales = data.get("cantidad_animales") # Esta clave ya incluye a los peces desde Logica.py
             plantas = data.get("cantidad_plantas")
             if animales is not None and plantas is not None:
                 return animales, plantas
