@@ -1,10 +1,10 @@
 import pygame
 import math
 import random
-from src.Logica.Terrenos.Terrenos import Rio, Selva, Pradera, Pez, Carcasa
+from .Terrenos.Terrenos import Rio, Selva, Pradera, Pez, Carcasa
 import src.Logica.Terrenos.Terrenos as Terrenos
-from src.Logica.Animales.Animal import Animal, CELL_SIZE, SCREEN_HEIGHT, BORDE_MARGEN, SIM_WIDTH
-from src.Logica.Animales.animales import Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto, Herbivoro, Carnivoro, Omnivoro
+from .Animales.Animal import Animal, CELL_SIZE, SCREEN_HEIGHT, BORDE_MARGEN, SIM_WIDTH
+from .Animales.animales import Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto, Herbivoro, Carnivoro, Omnivoro
 
 
 class Ecosistema:

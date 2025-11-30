@@ -1,11 +1,11 @@
 
 import pygame
 import random
-from src.Logica.Logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, SIM_WIDTH, SCREEN_HEIGHT
 import os
 import json
 from datetime import datetime
-from src.Interfaz.Constantes import *
+from ..Logica.Logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, SIM_WIDTH, SCREEN_HEIGHT
+from .Constantes import *
 
 class PopulationGraph:
     def __init__(self, x, y, width, height, font):

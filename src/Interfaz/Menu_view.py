@@ -1,5 +1,5 @@
 import pygame
-from .Constantes import SIM_WIDTH, SCREEN_HEIGHT, COLOR_BACKGROUND, COLOR_TEXT, COLOR_BUTTON, COLOR_SELECTED, UI_WIDTH
+from .Constantes import SIM_WIDTH, SCREEN_HEIGHT, COLOR_BACKGROUND, COLOR_TEXT, COLOR_BUTTON, COLOR_SELECTED, UI_WIDTH, UI_WIDTH
 
 class Menu:
     def __init__(self, screen, font_header, font_normal, font_small, users, saves_for_selected_user=None):
