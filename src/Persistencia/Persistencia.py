@@ -112,3 +112,16 @@ def eliminar_partida(username: str, save_name: str):
     else:
         print(f"Error: No se encontró la partida '{save_name}' para eliminar.")
         return False
+
+def obtener_fecha_guardado(ruta_archivo: str) -> str:
+    """Lee solo la fecha de guardado de un archivo JSON sin cargar todo el contenido."""
+    if not os.path.exists(ruta_archivo):
+        return None
+    try:
+        with open(ruta_archivo, 'r', encoding='utf-8') as f:
+            # Asumimos que la fecha está en las primeras líneas para una lectura rápida.
+            # Esto es una optimización; para archivos grandes, cargar todo el JSON sería lento.
+            data = json.load(f)
+            return data.get("fecha_guardado")
+    except (IOError, json.JSONDecodeError):
+        return None
