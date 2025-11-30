@@ -108,6 +108,13 @@ class SimulationController:
             if loaded_ecosystem:
                 self.ecosistema = loaded_ecosystem
                 self.view.graph.history.clear()
+                # Restaurar configuraciones de la simulación desde el ecosistema cargado
+                self.ecosistema.activar_modo_caza_carnivoro(forzar_estado=self.ecosistema.modo_caza_carnivoro_activo)
+                # Actualizar el texto del botón de caza en la vista
+                if self.ecosistema.modo_caza_carnivoro_activo:
+                    self.view.buttons["hunt"].text = "Regresar Carnívoros"
+                else:
+                    self.view.buttons["hunt"].text = "Cazar Herbívoros"
                 self._setup_button_actions() # Volver a configurar las acciones con el nuevo ecosistema
                 self.view.needs_static_redraw = True
                 return True # Carga exitosa
