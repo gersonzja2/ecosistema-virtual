@@ -1,6 +1,10 @@
 __pycache__/
+<<<<<<< HEAD
+*.json
+=======
 *.json
 *.db
 #mi_base.sqlite
 saves/
 
+>>>>>>> 88e479a1631603874e670c5ffefef36c97329100
