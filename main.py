@@ -205,7 +205,7 @@ class SimulationController:
 
                 elif command_type == "start_game":
                     user = command["user"]
-                    save_file = command["save"]
+                    save_file = command["save"] # Esto sigue siendo solo el nombre del archivo
                     self.save_path = os.path.join("saves", user, save_file)
                     
                     self._action_load()

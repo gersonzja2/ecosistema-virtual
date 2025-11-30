@@ -4,7 +4,9 @@ import random
 from src.Logica.Logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, SIM_WIDTH, SCREEN_HEIGHT
 import os
 import json
+from datetime import datetime
 from src.Interfaz.Constantes import *
+
 class PopulationGraph:
     def __init__(self, x, y, width, height, font):
         self.rect = pygame.Rect(x, y, width, height)
@@ -127,10 +129,10 @@ class Menu:
 
             # Lógica para seleccionar partidas
             save_y_start = 300
-            for i, save in enumerate(self.saves or []):
-                save_rect = pygame.Rect(SIM_WIDTH + 50, save_y_start + i * 30, 300, 30)
+            for i, save_data in enumerate(self.saves or []):
+                save_rect = pygame.Rect(SIM_WIDTH + 50, save_y_start + i * 45, 300, 40)
                 if save_rect.collidepoint(event.pos):
-                    self.selected_save = save
+                    self.selected_save = save_data["filename"]
                     return None
 
             # Lógica para botones
@@ -195,11 +197,23 @@ class Menu:
         if self.selected_user:
             self.screen.blit(self.font_header.render(f"Partidas de {self.selected_user}", True, COLOR_TEXT), (SIM_WIDTH + 20, 250))
             save_y_start = 300
-            for i, save in enumerate(self.saves or []):
-                color = COLOR_SELECTED if save == self.selected_save else COLOR_TEXT
-                save_name = save.replace(".json", "").replace("_", " ").capitalize()
+            for i, save_data in enumerate(self.saves or []):
+                filename = save_data["filename"]
+                metadata = save_data["metadata"]
+                
+                color = COLOR_SELECTED if filename == self.selected_save else COLOR_TEXT
+                save_name = filename.replace(".json", "").replace("_", " ").capitalize()
                 save_surf = self.font_normal.render(save_name, True, color)
-                self.screen.blit(save_surf, (SIM_WIDTH + 50, save_y_start + i * 30))
+                self.screen.blit(save_surf, (SIM_WIDTH + 50, save_y_start + i * 45))
+
+                if metadata:
+                    try:
+                        fecha_guardado = datetime.fromisoformat(metadata['save_date']).strftime('%d/%m/%Y %H:%M')
+                        meta_text = f"  Día {metadata['in_game_day']} | {metadata['animal_count']} animales | {fecha_guardado}"
+                        meta_surf = self.font_small.render(meta_text, True, (180, 180, 180))
+                        self.screen.blit(meta_surf, (SIM_WIDTH + 55, save_y_start + i * 45 + 20))
+                    except (KeyError, ValueError):
+                        pass # No mostrar metadatos si son inválidos o no existen
             
             # Botón para nueva partida
             pygame.draw.rect(self.screen, COLOR_BUTTON, self.buttons["new_save"])

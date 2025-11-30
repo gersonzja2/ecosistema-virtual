@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+from datetime import datetime
 from ..Logica.Logica import Ecosistema
 
 # Versión actual del simulador. Cambiar si la estructura de guardado se modifica.
@@ -29,6 +30,11 @@ def guardar_partida(ecosistema: Ecosistema, ruta_archivo: str):
         # 2. Escribir en el archivo temporal
         with open(ruta_temporal, 'w', encoding='utf-8') as f:
             datos = ecosistema.to_dict()
+            datos['metadata'] = {
+                "save_date": datetime.now().isoformat(),
+                "in_game_day": ecosistema.dia_total,
+                "animal_count": len(ecosistema.animales)
+            }
             datos['simulator_version'] = SIMULATOR_VERSION # Añadir la versión al guardar
             json.dump(datos, f, indent=2, ensure_ascii=False)
 
@@ -65,6 +71,7 @@ def cargar_partida(ruta_archivo: str) -> Ecosistema:
             datos = json.load(f)
             
             # Validación de versión
+            # La metadata se añadió después, así que no la validamos para compatibilidad hacia atrás
             version_guardado = datos.get("simulator_version")
             if version_guardado != SIMULATOR_VERSION:
                 print(f"Error: El archivo de guardado es de una versión incompatible.")
@@ -87,12 +94,32 @@ def obtener_lista_usuarios():
     except OSError:
         return []
 
+def obtener_metadatos_partida(ruta_archivo: str):
+    """Lee y devuelve solo los metadatos de un archivo de guardado."""
+    try:
+        with open(ruta_archivo, 'r', encoding='utf-8') as f:
+            datos = json.load(f)
+            return datos.get("metadata")
+    except (IOError, json.JSONDecodeError):
+        return None
+
 def obtener_partidas_usuario(username: str):
-    """Devuelve una lista de archivos de partida para un usuario."""
+    """
+    Devuelve una lista de diccionarios, cada uno con el nombre de archivo
+    y los metadatos de una partida para un usuario.
+    """
     user_path = os.path.join("saves", username)
     if not os.path.exists(user_path):
         return []
-    return [f for f in os.listdir(user_path) if f.endswith(".json")]
+    
+    partidas = []
+    for filename in os.listdir(user_path):
+        if filename.endswith(".json"):
+            ruta_completa = os.path.join(user_path, filename)
+            metadata = obtener_metadatos_partida(ruta_completa)
+            partidas.append({"filename": filename, "metadata": metadata})
+    
+    return partidas
 
 def crear_usuario(username: str):
     """Crea un nuevo directorio de usuario si no existe."""
