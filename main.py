@@ -89,16 +89,20 @@ class SimulationController:
             print("Error: No hay una ruta de guardado definida.")
 
     def _action_load(self):
-        """Utiliza la clase Persistencia para cargar el estado del ecosistema."""
+        """Utiliza la clase Persistencia para cargar el estado del ecosistema.
+        Devuelve True si la carga fue exitosa, False en caso contrario."""
         if self.save_path:
             loaded_ecosystem = persistencia.cargar_partida(self.save_path)
             if loaded_ecosystem:
                 self.ecosistema = loaded_ecosystem
                 self.view.graph.history.clear()
+                self._setup_button_actions() # Volver a configurar las acciones con el nuevo ecosistema
                 self.view.needs_static_redraw = True
+                return True # Carga exitosa
             else:
-                # If loading fails or file doesn't exist, create a new ecosystem
                 self.ecosistema = Ecosistema()
+                self._setup_button_actions() # También reconfigurar si la carga falla
+                return False # Carga fallida o archivo no existe
 
     def _action_restart(self):
         self.ecosistema = Ecosistema()
@@ -208,10 +212,11 @@ class SimulationController:
                     save_file = command["save"] # Esto sigue siendo solo el nombre del archivo
                     self.save_path = os.path.join("saves", user, save_file)
                     
-                    self._action_load()
+                    load_successful = self._action_load()
                     
-                    if not self.ecosistema.animales:
-                        print("Creando un nuevo mundo y poblándolo con animales.")
+                    # Solo poblar si la carga falló (es decir, es una partida nueva)
+                    if not load_successful:
+                        print("Archivo de guardado no encontrado. Creando un nuevo mundo y poblándolo.")
                         self._poblar_ecosistema()
 
                     self.current_state = "SIMULATION"
