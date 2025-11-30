@@ -407,10 +407,17 @@ class Ecosistema:
 
     def to_dict(self):
         """Convierte el estado del ecosistema a un diccionario serializable."""
+        cantidad_plantas = (
+            len(self.terreno.get("arboles", [])) +
+            len(self.terreno.get("plantas", [])) +
+            len(self.terreno.get("plantas_2", []))
+        )
         return {
             "fecha_guardado": datetime.now().isoformat(),
             "dia_total": self.dia_total,
             "hora_actual": self.hora_actual,
+            "cantidad_animales": len(self.animales),
+            "cantidad_plantas": cantidad_plantas,
             "grid_hierba": self.grid_hierba,
             "clima_actual": self.clima_actual,
             "selvas": [{"rect": list(s.rect), "bayas": s.bayas} for s in self.terreno["selvas"]],

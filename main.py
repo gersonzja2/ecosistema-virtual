@@ -234,6 +234,22 @@ class SimulationController:
                     self.menu.selected_user = username
                     self.menu.saves = persistencia.obtener_partidas_usuario(username)
                 
+                elif command_type == "rename_user":
+                    success = persistencia.renombrar_usuario(command["old_name"], command["new_name"])
+                    if success:
+                        self.menu.users = persistencia.obtener_lista_usuarios()
+                        self.menu.selected_user = command["new_name"]
+                        # Las partidas se recargarán en el siguiente ciclo del menú
+
+                elif command_type == "delete_user":
+                    success = persistencia.eliminar_usuario(command["username"])
+                    if success:
+                        self.menu.users = persistencia.obtener_lista_usuarios()
+                        self.menu.selected_user = None
+                        self.menu.selected_save = None
+                        self.menu.saves = []
+
+
                 elif command_type == "rename_save":
                     self.handle_menu_command(command)
 
@@ -253,7 +269,11 @@ class SimulationController:
                     save_file = command["save"]
                     save_path = os.path.join("saves", user, save_file)
                     date = persistencia.obtener_fecha_guardado(save_path)
+                    population = persistencia.obtener_info_poblacion(save_path)
+                    cycle = persistencia.obtener_ciclo_guardado(save_path)
                     self.menu.selected_save_date = date
+                    self.menu.selected_save_population = population
+                    self.menu.selected_save_cycle = cycle
 
                 elif command_type == "start_game":
                     user = command["user"]
