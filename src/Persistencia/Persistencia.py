@@ -133,6 +133,41 @@ def crear_usuario(username: str):
         # La confirmación al usuario debe ser manejada por la capa de Vista,
         # a petición de la Lógica.
 
+def renombrar_usuario(old_name: str, new_name: str):
+    """Renombra un directorio de usuario."""
+    old_path = os.path.join("saves", old_name)
+    new_path = os.path.join("saves", new_name)
+
+    if not os.path.exists(old_path):
+        print(f"Error: El usuario '{old_name}' no existe.")
+        return False
+    
+    if os.path.exists(new_path):
+        print(f"Error: El usuario '{new_name}' ya existe.")
+        return False
+
+    try:
+        os.rename(old_path, new_path)
+        print(f"Usuario renombrado de '{old_name}' a '{new_name}'.")
+        return True
+    except OSError as e:
+        print(f"Error al renombrar usuario: {e}")
+        return False
+
+def eliminar_usuario(username: str):
+    """Elimina un directorio de usuario y todo su contenido."""
+    user_path = os.path.join("saves", username)
+    if not os.path.exists(user_path):
+        print(f"Error: El usuario '{username}' no existe para ser eliminado.")
+        return False
+    try:
+        shutil.rmtree(user_path)
+        print(f"Usuario '{username}' y todas sus partidas han sido eliminados.")
+        return True
+    except OSError as e:
+        print(f"Error al eliminar el usuario '{username}': {e}")
+        return False
+
 def renombrar_partida(username: str, old_name: str, new_name: str):
     """Renombra un archivo de partida para un usuario."""
     user_path = os.path.join("saves", username)
@@ -174,8 +209,39 @@ def obtener_fecha_guardado(ruta_archivo: str) -> str:
         with open(ruta_archivo, 'r', encoding='utf-8') as f:
             # Asumimos que la fecha está en las primeras líneas para una lectura rápida.
             # Esto es una optimización; para archivos grandes, cargar todo el JSON sería lento.
+            datos = json.load(f)
+            metadata = datos.get("metadata", {})
+            return metadata.get("save_date")
+    except (IOError, json.JSONDecodeError):
+        return None
+
+def obtener_ciclo_guardado(ruta_archivo: str) -> tuple:
+    """Lee el día y la hora de un archivo de guardado."""
+    if not os.path.exists(ruta_archivo):
+        return None
+    try:
+        with open(ruta_archivo, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            return data.get("fecha_guardado")
+            dia = data.get("dia_total")
+            hora = data.get("hora_actual")
+            if dia is not None and hora is not None:
+                return dia, hora
+            return None
+    except (IOError, json.JSONDecodeError):
+        return None
+
+def obtener_info_poblacion(ruta_archivo: str) -> tuple:
+    """Lee la cantidad de animales y plantas de un archivo de guardado."""
+    if not os.path.exists(ruta_archivo):
+        return None
+    try:
+        with open(ruta_archivo, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            animales = data.get("cantidad_animales")
+            plantas = data.get("cantidad_plantas")
+            if animales is not None and plantas is not None:
+                return animales, plantas
+            return None
     except (IOError, json.JSONDecodeError):
         return None
 

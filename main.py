@@ -250,6 +250,39 @@ class SimulationController:
                     self.menu.users = persistencia.obtener_lista_usuarios()
                     self.menu.selected_user = username
                     self.menu.saves = persistencia.obtener_partidas_usuario(username)
+                
+                elif command_type == "rename_user":
+                    success = persistencia.renombrar_usuario(command["old_name"], command["new_name"])
+                    if success:
+                        self.menu.users = persistencia.obtener_lista_usuarios()
+                        self.menu.selected_user = command["new_name"]
+                        # Las partidas se recargarán en el siguiente ciclo del menú
+
+                elif command_type == "delete_user":
+                    success = persistencia.eliminar_usuario(command["username"])
+                    if success:
+                        self.menu.users = persistencia.obtener_lista_usuarios()
+                        self.menu.selected_user = None
+                        self.menu.selected_save = None
+                        self.menu.saves = []
+
+
+                elif command_type == "rename_save":
+                    success = persistencia.renombrar_partida(
+                        command["user"],
+                        command["old_name"],
+                        command["new_name"]
+                    )
+                    if success:
+                        self.menu.selected_save = {"filename": command["new_name"], "metadata": None} # Actualizar la selección
+                        self.menu.saves = persistencia.obtener_partidas_usuario(command["user"])
+
+                elif command_type == "delete_save":
+                    success = persistencia.eliminar_partida(command["user"], command["save"])
+                    if success:
+                        # Actualizar la vista del menú para reflejar la eliminación
+                        self.menu.selected_save = None
+                        self.menu.saves = persistencia.obtener_partidas_usuario(command["user"])
 
                 elif command_type == "select_user":
                     username = command["username"]
@@ -264,10 +297,14 @@ class SimulationController:
 
                 elif command_type == "select_save":
                     user = command["user"]
-                    save_file = command["save"]
+                    save_file = command["save"]["filename"] # Extraer el nombre de archivo del diccionario
                     save_path = os.path.join("saves", user, save_file)
                     date = persistencia.obtener_fecha_guardado(save_path)
+                    population = persistencia.obtener_info_poblacion(save_path)
+                    cycle = persistencia.obtener_ciclo_guardado(save_path)
                     self.menu.selected_save_date = date
+                    self.menu.selected_save_population = population
+                    self.menu.selected_save_cycle = cycle
 
                 elif command_type == "set_autosave":
                     self.autosave_interval = command["interval"]
@@ -275,7 +312,12 @@ class SimulationController:
 
                 elif command_type == "start_game":
                     user = command["user"]
-                    save_file = command["save"] # Esto sigue siendo solo el nombre del archivo
+                    save_data = command["save"]
+                    # El comando puede devolver un string (para partidas nuevas) o un dict (para partidas existentes)
+                    if isinstance(save_data, dict):
+                        save_file = save_data.get("filename")
+                    else:
+                        save_file = save_data # Ya es un string
                     self.current_user = user # Guardamos el usuario actual
                     self.save_path = os.path.join("saves", user, save_file) # type: ignore
                     self.autosave_interval = command.get("autosave") # Obtener el intervalo de autoguardado                    
