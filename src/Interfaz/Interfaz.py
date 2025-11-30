@@ -722,6 +722,7 @@ class PygameView:
             
             for name in active_buttons:
                 if self.buttons[name].rect.collidepoint(pos):
+                    print(f"DEBUG: PygameView detected click on button '{name}' at {pos}")
                     return {"type": f"click_button_{name}"}
 
             # 2. Si no es un botón, comprobar si se ha hecho clic en un animal en el área de simulación

@@ -242,6 +242,7 @@ class SimulationController:
                 button_name = command_type.replace("click_button_", "")
                 action = self.button_actions.get(button_name)
                 if action:
+                    print(f"DEBUG: Controller executing action for button '{button_name}'")
                     result = action()
                     # Si la acción fue avanzar el día, actualizamos el estado de sim_over
                     if button_name == "next_day" and result:

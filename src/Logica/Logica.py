@@ -410,8 +410,13 @@ class Ecosistema:
             "dia_total": self.dia_total,
             "hora_actual": self.hora_actual,
             "grid_hierba": self.grid_hierba,
+            "clima_actual": self.clima_actual,
             "selvas": [{"rect": list(s.rect), "bayas": s.bayas} for s in self.terreno["selvas"]],
             "rios": [{"rect": list(r.rect), "peces": [{"x": p.x, "y": p.y, "energia": p.energia} for p in r.peces]} for r in self.terreno["rios"]],
+            "arboles": [list(t) for t in self.terreno.get("arboles", [])],
+            "plantas": [list(p) for p in self.terreno.get("plantas", [])],
+            "plantas_2": [list(p) for p in self.terreno.get("plantas_2", [])],
+            "puentes": [list(p) for p in self.terreno.get("puentes", [])],
             "animales": [
                 {
                     "tipo": a.__class__.__name__,
@@ -433,6 +438,7 @@ class Ecosistema:
         ecosistema.dia_total = data.get("dia_total", 1)
         ecosistema.hora_actual = data.get("hora_actual", 0)
         ecosistema.grid_hierba = data.get("grid_hierba", ecosistema.grid_hierba)
+        ecosistema.clima_actual = data.get("clima_actual", ecosistema.clima_actual)
 
         # Cargar terrenos
         for i, s_data in enumerate(data.get("selvas", [])):
@@ -447,6 +453,41 @@ class Ecosistema:
                 pez = Pez(p_data["x"], p_data["y"], rio)
                 pez.energia = p_data.get("energia", 50)
                 rio.peces.append(pez)
+
+        # Restaurar decoraciones (árboles, plantas, puentes) si están en el archivo
+        if "arboles" in data:
+            ecosistema.terreno["arboles"] = [tuple(p) for p in data.get("arboles", [])]
+        if "plantas" in data:
+            ecosistema.terreno["plantas"] = [tuple(p) for p in data.get("plantas", [])]
+        if "plantas_2" in data:
+            ecosistema.terreno["plantas_2"] = [tuple(p) for p in data.get("plantas_2", [])]
+        if "puentes" in data:
+            ecosistema.terreno["puentes"] = [tuple(p) for p in data.get("puentes", [])]
+
+        # Recalcular la rejilla de tipo de terreno e indicadores de río (no sobreescribimos grid_hierba)
+        ecosistema.terrain_grid = [[None for _ in range(ecosistema.grid_height)] for _ in range(ecosistema.grid_width)]
+        ecosistema.is_river = [[False for _ in range(ecosistema.grid_height)] for _ in range(ecosistema.grid_width)]
+        terrain_hierarchy = [
+            ("montanas", "montana"),
+            ("santuarios", "santuario"),
+            ("selvas", "selva"),
+            ("praderas", "pradera")
+        ]
+        for gx in range(ecosistema.grid_width):
+            for gy in range(ecosistema.grid_height):
+                cell_rect = pygame.Rect(gx * CELL_SIZE, gy * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                if any(rio.rect.colliderect(cell_rect) for rio in ecosistema.terreno["rios"]):
+                    ecosistema.terrain_grid[gx][gy] = "rio"
+                    ecosistema.is_river[gx][gy] = True
+                    continue
+                for terrain_list_name, terrain_type_name in terrain_hierarchy:
+                    if any(t.rect.colliderect(cell_rect) for t in ecosistema.terreno[terrain_list_name]):
+                        ecosistema.terrain_grid[gx][gy] = terrain_type_name
+                        break
+
+        # Actualizar caché de terrenos cercanos
+        ecosistema.terrain_cache = {"rio": {}, "selva": {}}
+        ecosistema._precalcular_terrenos_cercanos()
 
         # Cargar animales
         ecosistema.animales = []
