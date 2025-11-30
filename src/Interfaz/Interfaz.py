@@ -1,263 +1,10 @@
 
 import pygame
 import random
+from src.Logica.Logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, SIM_WIDTH, SCREEN_HEIGHT
+from src.Interfaz.Constantes import *
+from .Componentes_ui import PopulationGraph, Button, Cloud
 import os
-import json
-from datetime import datetime
-from ..Logica.Logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, SIM_WIDTH, SCREEN_HEIGHT
-from .Constantes import *
-
-class PopulationGraph:
-    def __init__(self, x, y, width, height, font):
-        self.rect = pygame.Rect(x, y, width, height)
-        self.font = font
-        self.history = []
-        self.colors = {
-            "herb": (255, 255, 255),
-            "carn": (231, 76, 60),
-            "omni": (52, 152, 219)
-        }
-        self.labels = {
-            "herb": "Herbívoros",
-            "carn": "Carnívoros", 
-            "omni": "Omnívoros"
-        }
-
-    def update(self, populations):
-        self.history.append(populations)
-        if len(self.history) > self.rect.width:
-            self.history.pop(0)
-
-    def draw(self, surface):
-        pygame.draw.rect(surface, (40, 40, 40), self.rect)
-        title_surf = self.font.render("Población", True, (236, 240, 241))
-        surface.blit(title_surf, (self.rect.x + 5, self.rect.y + 5))
-
-        legend_y = self.rect.y + 20
-        for pop_type, label in self.labels.items():
-            label_surf = self.font.render(label, True, self.colors[pop_type])
-            surface.blit(label_surf, (self.rect.right - 80, legend_y))
-            legend_y += 15
-
-        if not self.history:
-            return
-
-        try:
-            max_pop = max((max(p) for p in self.history if p), default=1)
-        except ValueError:
-            max_pop = 1
-
-        for i, pop_type in enumerate(["herb", "carn", "omni"]):
-            points = []
-            for day, pops in enumerate(self.history):
-                x_pos = self.rect.x + day
-                y_pos = self.rect.bottom - int((pops[i] / max_pop) * (self.rect.height - 20))
-                points.append((x_pos, y_pos))
-            if len(points) > 1:
-                pygame.draw.lines(surface, self.colors[pop_type], False, points, 1)
-
-class Button:
-    def __init__(self, x, y, width, height, text, color, text_color):
-        self.rect = pygame.Rect(x, y, width, height)
-        self.text = text
-        self.color = color
-        self.text_color = text_color
-        self.font = pygame.font.SysFont("helvetica", 20)
-
-    def draw(self, surface):
-        pygame.draw.rect(surface, self.color, self.rect, border_radius=8)
-        text_surf = self.font.render(self.text, True, self.text_color)
-        text_rect = text_surf.get_rect(center=self.rect.center)
-        surface.blit(text_surf, text_rect)
-
-class Cloud:
-    """Representa una nube que se mueve por la pantalla."""
-    def __init__(self, image, screen_width, screen_height, y_range):
-        self.image = image
-        self.screen_width = screen_width
-        self.screen_height = screen_height
-        self.y_range = y_range
-        self.reset(on_screen=True) # Inicia en una posición aleatoria en pantalla
-
-    def reset(self, on_screen=False):
-        """Reinicia la posición y velocidad de la nube."""
-        self.speed = random.uniform(0.2, 0.8) # Velocidad lenta y variable
-        self.y = random.randint(self.y_range[0], self.y_range[1]) # Aparecen en el rango Y especificado
-        # Si on_screen es True, la posiciona en cualquier parte de la pantalla. Si no, a la izquierda.
-        if on_screen:
-            self.x = random.randint(0, self.screen_width)
-        else:
-            self.x = random.randint(-self.image.get_width() - 200, -self.image.get_width())
-
-    def update(self):
-        """Mueve la nube y la reinicia si sale de la pantalla."""
-        self.x += self.speed
-        if self.x > self.screen_width:
-            self.reset()
-
-class Menu:
-    def __init__(self, screen, font_header, font_normal, font_small, users, saves_for_selected_user=None):
-        self.screen = screen
-        self.font_header = font_header
-        self.font_normal = font_normal
-        self.font_small = font_small
-        self.users = users
-        self.saves = saves_for_selected_user or []
-        self.selected_user = None
-        self.selected_save = None
-        self.input_text = ""
-        self.input_active = False
-        self.autosave_options = [None, 10, 30, 50] # None para OFF
-        self.selected_autosave = None
-        self.autosave_rects = {}
-
-        self.buttons = {
-            "new_user": pygame.Rect(SIM_WIDTH + 50, 200, 300, 40),
-            "new_save": pygame.Rect(SIM_WIDTH + 50, 450, 300, 40),
-            "start_game": pygame.Rect(SIM_WIDTH + 50, 600, 300, 50)
-        }
-
-    def handle_event(self, event):
-        """Maneja los eventos de Pygame para el menú."""
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            # Lógica para seleccionar usuarios
-            user_y_start = 100
-            for i, user in enumerate(self.users or []):
-                user_rect = pygame.Rect(SIM_WIDTH + 50, user_y_start + i * 30, 300, 30)
-                if user_rect.collidepoint(event.pos):
-                    self.selected_user = user
-                    self.selected_save = None
-                    # Devuelve una solicitud para que el controlador cargue las partidas de este usuario
-                    return {"type": "select_user", "username": user}
-
-            # Lógica para seleccionar partidas
-            save_y_start = 300
-            for i, save_data in enumerate(self.saves or []):
-                save_rect = pygame.Rect(SIM_WIDTH + 50, save_y_start + i * 45, 300, 40)
-                if save_rect.collidepoint(event.pos):
-                    self.selected_save = save_data["filename"]
-                    return None
-
-            # Lógica para seleccionar autoguardado
-            for option, rect in self.autosave_rects.items():
-                if rect.collidepoint(event.pos):
-                    self.selected_autosave = option
-                    # No es necesario devolver un comando, solo actualizar el estado interno
-                    return None
-
-
-            # Lógica para botones
-            if self.buttons["new_user"].collidepoint(event.pos):
-                self.input_active = True
-                self.input_text = ""
-                return None
-            
-            if self.buttons["new_save"].collidepoint(event.pos) and self.selected_user:
-                # Crear una nueva partida (se guardará al salir de la simulación)
-                num_saves = len(self.saves)
-                new_save_name = f"partida_{num_saves + 1}.json"
-                self.selected_save = new_save_name # Seleccionamos el nuevo nombre
-                # Devolvemos la información para que el controlador decida qué hacer
-                return {"type": "start_game", "user": self.selected_user, "save": self.selected_save, "autosave": self.selected_autosave}
-
-            if self.buttons["start_game"].collidepoint(event.pos) and self.selected_user and self.selected_save:
-                return {"type": "start_game", "user": self.selected_user, "save": self.selected_save, "autosave": self.selected_autosave}
-
-        if event.type == pygame.KEYDOWN and self.input_active:
-            if event.key == pygame.K_RETURN:
-                if self.input_text:
-                    username = self.input_text
-                    self.input_active = False
-                    self.input_text = ""
-                    return {"type": "create_user", "username": username}
-            elif event.key == pygame.K_BACKSPACE:
-                self.input_text = self.input_text[:-1]
-            else:
-                self.input_text += event.unicode
-        
-        return None
-
-    def draw(self):
-        """Dibuja el menú completo en la pantalla."""
-        self.screen.fill(COLOR_BACKGROUND)
-        
-        # Título
-        title_surf = self.font_header.render("Simulador de Ecosistema", True, COLOR_TEXT)
-        self.screen.blit(title_surf, (SIM_WIDTH // 2 - title_surf.get_width() // 2, 200))
-        
-        # Panel derecho
-        pygame.draw.rect(self.screen, (40, 40, 40), (SIM_WIDTH, 0, UI_WIDTH, SCREEN_HEIGHT))
-        
-        # Sección de Usuarios
-        self.screen.blit(self.font_header.render("Usuarios", True, COLOR_TEXT), (SIM_WIDTH + 20, 50))
-        user_y_start = 100
-        for i, user in enumerate(self.users or []):
-            color = COLOR_SELECTED if user == self.selected_user else COLOR_TEXT
-            user_surf = self.font_normal.render(user, True, color)
-            self.screen.blit(user_surf, (SIM_WIDTH + 50, user_y_start + i * 30))
-
-        # Botón/Input para nuevo usuario
-        pygame.draw.rect(self.screen, COLOR_BUTTON, self.buttons["new_user"])
-        if self.input_active:
-            input_surf = self.font_normal.render(self.input_text + "|", True, COLOR_TEXT)
-        else:
-            input_surf = self.font_normal.render("Crear Nuevo Usuario", True, COLOR_TEXT)
-        self.screen.blit(input_surf, (self.buttons["new_user"].x + 10, self.buttons["new_user"].y + 10))
-
-        # Sección de Partidas
-        if self.selected_user:
-            self.screen.blit(self.font_header.render(f"Partidas de {self.selected_user}", True, COLOR_TEXT), (SIM_WIDTH + 20, 250))
-            save_y_start = 300
-            for i, save_data in enumerate(self.saves or []):
-                filename = save_data["filename"]
-                metadata = save_data["metadata"]
-                
-                color = COLOR_SELECTED if filename == self.selected_save else COLOR_TEXT
-                save_name = filename.replace(".json", "").replace("_", " ").capitalize()
-                save_surf = self.font_normal.render(save_name, True, color)
-                self.screen.blit(save_surf, (SIM_WIDTH + 50, save_y_start + i * 45))
-
-                if metadata:
-                    try:
-                        fecha_guardado = datetime.fromisoformat(metadata['save_date']).strftime('%d/%m/%Y %H:%M')
-                        meta_text = f"  Día {metadata['in_game_day']} | {metadata['animal_count']} animales | {fecha_guardado}"
-                        meta_surf = self.font_small.render(meta_text, True, (180, 180, 180))
-                        self.screen.blit(meta_surf, (SIM_WIDTH + 55, save_y_start + i * 45 + 20))
-                    except (KeyError, ValueError):
-                        pass # No mostrar metadatos si son inválidos o no existen
-            
-            # Botón para nueva partida
-            pygame.draw.rect(self.screen, COLOR_BUTTON, self.buttons["new_save"])
-            new_save_surf = self.font_normal.render("Nueva Partida", True, COLOR_TEXT)
-            self.screen.blit(new_save_surf, (self.buttons["new_save"].x + 10, self.buttons["new_save"].y + 10))
-
-        # Sección de Autoguardado
-        autosave_y_start = 520
-        self.screen.blit(self.font_normal.render("Autoguardado (días):", True, COLOR_TEXT), (SIM_WIDTH + 20, autosave_y_start))
-        
-        option_labels = {None: "OFF", 10: "10", 30: "30", 50: "50"}
-        option_x_start = SIM_WIDTH + 200
-        self.autosave_rects.clear()
-        for i, option in enumerate(self.autosave_options):
-            label = option_labels[option]
-            color = COLOR_SELECTED if self.selected_autosave == option else COLOR_TEXT
-            text_surf = self.font_normal.render(label, True, color)
-            text_rect = text_surf.get_rect(topleft=(option_x_start + i * 60, autosave_y_start))
-            self.screen.blit(text_surf, text_rect)
-            self.autosave_rects[option] = text_rect
-
-        # Botón para Iniciar
-        if self.selected_user and self.selected_save:
-            pygame.draw.rect(self.screen, (0, 150, 0), self.buttons["start_game"])
-            # La vista ya no sabe si el archivo existe. El controlador se encargará de eso.
-            # Simplificamos el texto o asumimos que el controlador manejará la lógica de carga/creación.
-            start_text = "Empezar / Cargar"
-            if not self.selected_save.startswith("partida_"): # Heurística simple
-                start_text = "Cargar Partida"
-            start_surf = self.font_header.render(start_text, True, COLOR_TEXT)
-            self.screen.blit(start_surf, (self.buttons["start_game"].centerx - start_surf.get_width() // 2, self.buttons["start_game"].centery - start_surf.get_height() // 2))
-
-        pygame.display.flip()
 
 class PygameView:
     def __init__(self):
@@ -416,11 +163,22 @@ class PygameView:
         buttons["add_insecto"] = Button(col3_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Insecto", COLOR_HERBIVORO, (0,0,0))
         
         btn_width_small, btn_height_small = 90, 30
-        buttons["save"] = Button(SIM_WIDTH + 10, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Guardar", (0, 100, 0), COLOR_TEXT)
-        buttons["load"] = Button(SIM_WIDTH + 10 + btn_width_small + spacing, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Cargar", (100, 100, 0), COLOR_TEXT)
-        buttons["restart"] = Button(SIM_WIDTH + 10 + 2 * (btn_width_small + spacing), SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Reiniciar", (200, 50, 50), COLOR_TEXT)
+        
+        # --- Posicionamiento dinámico de botones inferiores para una alineación perfecta ---
+        current_x = SIM_WIDTH + 10
+        y_pos = SCREEN_HEIGHT - 40
+
+        # Botón "Guardar como..."
+        save_as_width = btn_width_small + 30 # Ancho personalizado
+        buttons["save_as"] = Button(current_x, y_pos, save_as_width, btn_height_small, "Guardar como...", (0, 100, 100), COLOR_TEXT)
+        current_x += save_as_width + spacing
+
+        # Botones restantes
+        buttons["restart"] = Button(current_x, y_pos, btn_width_small, btn_height_small, "Reiniciar", (200, 50, 50), COLOR_TEXT)
+        current_x += btn_width_small + spacing
+
         music_text = "Música: ON" if getattr(self, 'music_playing', False) else "Música: OFF"
-        buttons["music"] = Button(SIM_WIDTH + 10 + 3 * (btn_width_small + spacing), SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, music_text, (80, 80, 80), COLOR_TEXT)
+        buttons["music"] = Button(current_x, y_pos, btn_width_small, btn_height_small, music_text, (80, 80, 80), COLOR_TEXT)
 
         # Botones contextuales (se dibujarán por separado)
         buttons["force_reproduce"] = Button(SIM_WIDTH + 15, 200, 180, 30, "Forzar Reproducción", (142, 68, 173), COLOR_TEXT)
@@ -702,6 +460,47 @@ class PygameView:
             coord_text = f"({self.mouse_pos[0]}, {self.mouse_pos[1]})"
             self._draw_text(coord_text, self.font_small, COLOR_TEXT, self.screen, 10, SCREEN_HEIGHT - 45)
         
+        pygame.display.flip()
+
+    def draw_save_menu(self, save_slots, input_text, selected_save):
+        """Dibuja un menú superpuesto para 'Guardar como...'."""
+        # Dibuja un rectángulo semitransparente sobre el área de simulación
+        overlay = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))
+        self.screen.blit(overlay, (0, 0))
+
+        # Panel de guardado
+        panel_rect = pygame.Rect(150, 150, 500, 400)
+        pygame.draw.rect(self.screen, (30, 30, 30), panel_rect, border_radius=15)
+        pygame.draw.rect(self.screen, COLOR_SELECTED, panel_rect, width=2, border_radius=15)
+
+        # Título
+        title_surf = self.font_header.render("Guardar Partida Como...", True, COLOR_TEXT)
+        self.screen.blit(title_surf, (panel_rect.x + 20, panel_rect.y + 20))
+
+        # Campo de texto para nuevo nombre
+        input_rect = pygame.Rect(panel_rect.x + 20, panel_rect.y + 70, panel_rect.width - 40, 40)
+        pygame.draw.rect(self.screen, (50, 50, 50), input_rect)
+        input_surf = self.font_normal.render(input_text + "|", True, COLOR_TEXT)
+        self.screen.blit(input_surf, (input_rect.x + 10, input_rect.y + 10))
+
+        # Lista de partidas existentes para sobrescribir
+        self._draw_text("O selecciona una para sobrescribir:", self.font_small, COLOR_TEXT, self.screen, panel_rect.x + 20, panel_rect.y + 130)
+        save_y_start = panel_rect.y + 160
+        for i, save in enumerate(save_slots):
+            # 'save' es un diccionario: {'filename': '...', 'metadata': ...}
+            # 'selected_save' es un string: 'partida_1.json'
+            filename = save.get("filename", "")
+            color = COLOR_SELECTED if filename == selected_save else COLOR_TEXT
+            save_name = filename.replace(".json", "").replace("_", " ").capitalize()
+            save_surf = self.font_normal.render(save_name, True, color)
+            save_rect = save_surf.get_rect(topleft=(panel_rect.x + 20, save_y_start + i * 35))
+            self.screen.blit(save_surf, save_rect)
+
+        # Instrucciones
+        self._draw_text("Presiona ENTER para guardar.", self.font_small, COLOR_TEXT, self.screen, panel_rect.x + 20, panel_rect.bottom - 50)
+        self._draw_text("Presiona ESC para cancelar.", self.font_small, COLOR_TEXT, self.screen, panel_rect.x + 20, panel_rect.bottom - 30)
+
         pygame.display.flip()
 
     def close(self):

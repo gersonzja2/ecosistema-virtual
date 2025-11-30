@@ -38,7 +38,7 @@ class Menu:
             for i, save in enumerate(self.saves or []):
                 save_rect = pygame.Rect(SIM_WIDTH + 50, save_y_start + i * 30, 300, 30)
                 if save_rect.collidepoint(event.pos):
-                    self.selected_save = save
+                    self.selected_save = save["filename"]
                     return None
 
             # Lógica para botones
@@ -104,8 +104,8 @@ class Menu:
             self.screen.blit(self.font_header.render(f"Partidas de {self.selected_user}", True, COLOR_TEXT), (SIM_WIDTH + 20, 250))
             save_y_start = 300
             for i, save in enumerate(self.saves or []):
-                color = COLOR_SELECTED if save == self.selected_save else COLOR_TEXT
-                save_name = save.replace(".json", "").replace("_", " ").capitalize()
+                color = COLOR_SELECTED if save["filename"] == self.selected_save else COLOR_TEXT
+                save_name = save["filename"].replace(".json", "").replace("_", " ").capitalize()
                 save_surf = self.font_normal.render(save_name, True, color)
                 self.screen.blit(save_surf, (SIM_WIDTH + 50, save_y_start + i * 30))
             

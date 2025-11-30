@@ -129,6 +129,39 @@ def crear_usuario(username: str):
         # La confirmación al usuario debe ser manejada por la capa de Vista,
         # a petición de la Lógica.
 
+def renombrar_partida(username: str, old_name: str, new_name: str):
+    """Renombra un archivo de partida para un usuario."""
+    user_path = os.path.join("saves", username)
+    if not os.path.exists(user_path):
+        print(f"Error: El directorio del usuario {username} no existe.")
+        return False
+    
+    old_path = os.path.join(user_path, old_name)
+    new_path = os.path.join(user_path, new_name)
+
+    if os.path.exists(old_path):
+        os.rename(old_path, new_path)
+        print(f"Partida renombrada de {old_name} a {new_name}")
+        return True
+    return False
+
+def eliminar_partida(username: str, save_name: str):
+    """Elimina un archivo de partida para un usuario."""
+    user_path = os.path.join("saves", username)
+    save_path = os.path.join(user_path, save_name)
+
+    if os.path.exists(save_path):
+        try:
+            os.remove(save_path)
+            print(f"Partida '{save_name}' eliminada para el usuario '{username}'.")
+            return True
+        except OSError as e:
+            print(f"Error al eliminar la partida '{save_name}': {e}")
+            return False
+    else:
+        print(f"Error: No se encontró la partida '{save_name}' para eliminar.")
+        return False
+
 def limpiar_archivos_temporales_antiguos(directorio_saves="saves"):
     """
     Busca y elimina archivos temporales (.tmp) en el directorio de guardado y sus subdirectorios.
