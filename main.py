@@ -1,7 +1,8 @@
 import pygame
 import os
 from src.Logica.Logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto
-from src.Interfaz.Interfaz import PygameView, Menu
+from src.Interfaz.Interfaz import PygameView
+from src.Interfaz.Menu_view import Menu
 import src.Persistencia.Persistencia as persistencia # Importamos el nuevo módulo
 
 class SimulationController:
@@ -15,8 +16,9 @@ class SimulationController:
         users = persistencia.obtener_lista_usuarios()
         self.menu = Menu(self.view.screen, self.view.font_header, self.view.font_normal, self.view.font_small, users)
         
-        self.current_state = "MENU" # Estados: "MENU", "SIMULATION"
+        self.current_state = "MENU" # Estados: "MENU", "SIMULATION", "SAVING"
         self.save_path = None
+        self.current_user = None
 
         self.animal_seleccionado = None
         self.pareja_seleccionada = None
@@ -72,6 +74,7 @@ class SimulationController:
             "pause_resume": self._action_toggle_pause,
             "next_day": self._action_advance_day,
             "restart": self._action_restart,
+            "save_as": self._action_save_as,
             "feed_herbivores": self._action_feed_all_herbivores,
             "force_reproduce": self._action_force_reproduce,
             "hunt": self._action_toggle_hunt_mode
@@ -110,6 +113,21 @@ class SimulationController:
         self.paused = True
         # No es necesario reiniciar sim_over aquí, ya que se gestiona en el bucle principal.
         print("Simulación reiniciada a su estado inicial.")
+
+    def _action_save_as(self):
+        """Inicia el modo 'Guardar como...'."""
+        self.current_state = "SAVING"
+        self.paused = True # Pausar la simulación mientras se guarda
+        # Preparar el menú de guardado
+        self.save_menu_saves = persistencia.obtener_partidas_usuario(self.current_user)
+        self.save_menu_input = ""
+
+        # Pre-seleccionar la partida actual en el menú de "Guardar como..."
+        if self.save_path:
+            self.save_menu_selected = os.path.basename(self.save_path)
+        else:
+            self.save_menu_selected = None
+
     def _action_toggle_pause(self): self.paused = not self.paused
     def _action_advance_day(self):
         if self.ecosistema.dia_total < self.dias_simulacion and self.ecosistema.animales:
@@ -166,6 +184,12 @@ class SimulationController:
             self.clock.tick(60)  # Mantener 60 FPS constantes
             
             if self.current_state == "MENU":
+                # Al volver al menú, siempre recargamos los usuarios y las partidas del usuario seleccionado.
+                # Esto asegura que los cambios (nuevas partidas, renombrados) se reflejen.
+                self.menu.users = persistencia.obtener_lista_usuarios()
+                if self.menu.selected_user:
+                    self.menu.saves = persistencia.obtener_partidas_usuario(self.menu.selected_user)
+
                 self.menu.draw()
                 running = self.handle_menu_events()
             
@@ -180,6 +204,10 @@ class SimulationController:
                 running, sim_over = self.handle_simulation_events(running, sim_over)
 
                 self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier)
+            
+            elif self.current_state == "SAVING":
+                self.view.draw_save_menu(self.save_menu_saves, self.save_menu_input, self.save_menu_selected) # Pasamos el save seleccionado
+                running = self.handle_saving_events()
     
         self.view.close()
 
@@ -198,6 +226,16 @@ class SimulationController:
                     self.menu.users = persistencia.obtener_lista_usuarios()
                     self.menu.selected_user = username
                     self.menu.saves = persistencia.obtener_partidas_usuario(username)
+                
+                elif command_type == "rename_save":
+                    self.handle_menu_command(command)
+
+                elif command_type == "delete_save":
+                    success = persistencia.eliminar_partida(command["user"], command["save"])
+                    if success:
+                        # Actualizar la vista del menú para reflejar la eliminación
+                        self.menu.selected_save = None
+                        self.menu.saves = persistencia.obtener_partidas_usuario(command["user"])
 
                 elif command_type == "select_user":
                     username = command["username"]
@@ -206,6 +244,7 @@ class SimulationController:
                 elif command_type == "start_game":
                     user = command["user"]
                     save_file = command["save"]
+                    self.current_user = user # Guardamos el usuario actual
                     self.save_path = os.path.join("saves", user, save_file)
                     
                     self._action_load()
@@ -216,6 +255,16 @@ class SimulationController:
 
                     self.current_state = "SIMULATION"
         return True
+    
+    def handle_menu_command(self, command):
+        command_type = command.get("type")
+        if command_type == "rename_save":
+            success = persistencia.renombrar_partida(command["user"], command["old_name"], command["new_name"])
+            if success:
+                # Actualizar la vista del menú
+                self.menu.saves = persistencia.obtener_partidas_usuario(command["user"])
+                self.menu.selected_save = command["new_name"] # Seleccionar el nuevo nombre
+                self.menu.input_text = ""
 
     def handle_simulation_events(self, running, sim_over):
         for event in pygame.event.get():
@@ -250,9 +299,51 @@ class SimulationController:
 
         return running, sim_over
 
+    def handle_saving_events(self):
+        """Maneja los eventos en el menú 'Guardar como...'."""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return False
+            
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.current_state = "SIMULATION" # Cancelar y volver a la simulación
+                    return True
+                elif event.key == pygame.K_RETURN:
+                    # Determinar el nombre del archivo a guardar
+                    if self.save_menu_input: # Prioridad al texto introducido
+                        save_name = self.save_menu_input.strip().replace(" ", "_") + ".json"
+                    elif self.save_menu_selected: # Si no hay texto, usar la selección
+                        save_name = self.save_menu_selected
+                    else: # No hay nada que guardar
+                        return True
+
+                    # Guardar la partida
+                    new_save_path = os.path.join("saves", self.current_user, save_name)
+                    persistencia.guardar_partida(self.ecosistema, new_save_path)
+                    self.save_path = new_save_path # Actualizar la ruta de guardado actual
+                    
+                    # Volver a la simulación
+                    self.current_state = "SIMULATION"
+                    return True
+                elif event.key == pygame.K_BACKSPACE:
+                    self.save_menu_input = self.save_menu_input[:-1]
+                else:
+                    self.save_menu_input += event.unicode
+            
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # Lógica para seleccionar una partida de la lista
+                for i, save in enumerate(self.save_menu_saves):
+                    save_rect = pygame.Rect(170, 310 + i * 35, 460, 30)
+                    if save_rect.collidepoint(event.pos):
+                        self.save_menu_selected = save
+                        self.save_menu_input = "" # Limpiar el input al seleccionar
+        return True
+
 def main():
     controlador = SimulationController(dias_simulacion=200)
     controlador.run()
+    
 
 if __name__ == "__main__":
     main()
