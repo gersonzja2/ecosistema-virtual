@@ -19,7 +19,7 @@ class SimulationController:
         self.current_state = "MENU" # Estados: "MENU", "SIMULATION", "SAVING"
         self.save_path = None
         self.current_user = None
-
+        
         self.autosave_interval = None # Días entre autoguardados. None para desactivado.
         self.days_since_last_autosave = 0
 
@@ -61,13 +61,13 @@ class SimulationController:
             return True
         if self.ecosistema.hora_actual == 0:
             self._actualizar_grafico()
-            if self.autosave_interval:
+            if self.autosave_interval is not None and self.autosave_interval > 0:
                 self.days_since_last_autosave += 1
                 if self.days_since_last_autosave >= self.autosave_interval:
                     print(f"Autoguardando partida... (Intervalo: {self.autosave_interval} días)")
-                    self._action_save()
+                    self._action_save(autosave=True)
                     self.days_since_last_autosave = 0
-        return False
+        return self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales
 
     def _setup_button_actions(self):
         animal_map = {
@@ -93,10 +93,10 @@ class SimulationController:
         for name, cls in animal_map.items():
             self.button_actions[f"add_{name}"] = lambda species=cls: self.ecosistema.agregar_animal(species)
         
-    def _action_save(self):
+    def _action_save(self, autosave=False):
         """Utiliza la clase Persistencia para guardar el estado del ecosistema."""
         if self.save_path:
-            persistencia.guardar_partida(self.ecosistema, self.save_path)
+            persistencia.guardar_partida(self.ecosistema, self.save_path, autosave=autosave)
         else:
             print("Error: No hay una ruta de guardado definida.")
 
@@ -250,16 +250,6 @@ class SimulationController:
                     self.menu.users = persistencia.obtener_lista_usuarios()
                     self.menu.selected_user = username
                     self.menu.saves = persistencia.obtener_partidas_usuario(username)
-                
-                elif command_type == "rename_save":
-                    self.handle_menu_command(command)
-
-                elif command_type == "delete_save":
-                    success = persistencia.eliminar_partida(command["user"], command["save"])
-                    if success:
-                        # Actualizar la vista del menú para reflejar la eliminación
-                        self.menu.selected_save = None
-                        self.menu.saves = persistencia.obtener_partidas_usuario(command["user"])
 
                 elif command_type == "select_user":
                     username = command["username"]
@@ -279,12 +269,16 @@ class SimulationController:
                     date = persistencia.obtener_fecha_guardado(save_path)
                     self.menu.selected_save_date = date
 
+                elif command_type == "set_autosave":
+                    self.autosave_interval = command["interval"]
+                    print(f"Intervalo de autoguardado establecido en: {self.autosave_interval} días.")
+
                 elif command_type == "start_game":
                     user = command["user"]
                     save_file = command["save"] # Esto sigue siendo solo el nombre del archivo
                     self.current_user = user # Guardamos el usuario actual
-                    self.save_path = os.path.join("saves", user, save_file)
-                    self.autosave_interval = command.get("autosave") # Obtener el intervalo de autoguardado
+                    self.save_path = os.path.join("saves", user, save_file) # type: ignore
+                    self.autosave_interval = command.get("autosave") # Obtener el intervalo de autoguardado                    
                     
                     load_successful = self._action_load()
                     
@@ -296,16 +290,6 @@ class SimulationController:
                     self.current_state = "SIMULATION"
         return True
     
-    def handle_menu_command(self, command):
-        command_type = command.get("type")
-        if command_type == "rename_save":
-            success = persistencia.renombrar_partida(command["user"], command["old_name"], command["new_name"])
-            if success:
-                # Actualizar la vista del menú
-                self.menu.saves = persistencia.obtener_partidas_usuario(command["user"])
-                self.menu.selected_save = command["new_name"] # Seleccionar el nuevo nombre
-                self.menu.input_text = ""
-
     def handle_simulation_events(self, running, sim_over):
         for event in pygame.event.get():
             # La vista procesa el evento y devuelve un comando de alto nivel
@@ -373,10 +357,10 @@ class SimulationController:
             
             if event.type == pygame.MOUSEBUTTONDOWN:
                 # Lógica para seleccionar una partida de la lista
-                for i, save in enumerate(self.save_menu_saves):
-                    save_rect = pygame.Rect(170, 310 + i * 35, 460, 30)
-                    if save_rect.collidepoint(event.pos) and isinstance(save, dict):
-                        self.save_menu_selected = save.get("filename")
+                save_slot_rects = self.view.get_save_slot_rects(self.save_menu_saves)
+                for i, rect in enumerate(save_slot_rects):
+                    if rect.collidepoint(event.pos):
+                        self.save_menu_selected = self.save_menu_saves[i].get("filename")
                         self.save_menu_input = "" # Limpiar el input al seleccionar
         return True
 
