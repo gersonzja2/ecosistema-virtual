@@ -375,8 +375,11 @@ class Ecosistema:
             nuevo_animal.reproducir_sonido(1)
 
 
-    def activar_modo_caza_carnivoro(self):
-        self.modo_caza_carnivoro_activo = not self.modo_caza_carnivoro_activo
+    def activar_modo_caza_carnivoro(self, forzar_estado=None):
+        if forzar_estado is not None:
+            self.modo_caza_carnivoro_activo = forzar_estado
+        else:
+            self.modo_caza_carnivoro_activo = not self.modo_caza_carnivoro_activo
         for animal in self.animales:
             if isinstance(animal, Carnivoro):
                 animal.modo_caza_activado = self.modo_caza_carnivoro_activo
@@ -412,12 +415,15 @@ class Ecosistema:
             len(self.terreno.get("plantas", [])) +
             len(self.terreno.get("plantas_2", []))
         )
+        cantidad_peces = sum(len(r.peces) for r in self.terreno.get("rios", []))
+        cantidad_total_animales = len(self.animales) + cantidad_peces
         return {
             "fecha_guardado": datetime.now().isoformat(),
             "dia_total": self.dia_total,
             "hora_actual": self.hora_actual,
-            "cantidad_animales": len(self.animales),
+            "cantidad_animales": cantidad_total_animales,
             "cantidad_plantas": cantidad_plantas,
+            "modo_caza_carnivoro_activo": self.modo_caza_carnivoro_activo,
             "grid_hierba": self.grid_hierba,
             "clima_actual": self.clima_actual,
             "selvas": [{"rect": list(s.rect), "bayas": s.bayas} for s in self.terreno["selvas"]],
@@ -448,6 +454,7 @@ class Ecosistema:
         ecosistema.hora_actual = data.get("hora_actual", 0)
         ecosistema.grid_hierba = data.get("grid_hierba", ecosistema.grid_hierba)
         ecosistema.clima_actual = data.get("clima_actual", ecosistema.clima_actual)
+        ecosistema.modo_caza_carnivoro_activo = data.get("modo_caza_carnivoro_activo", False)
 
         # Cargar terrenos
         for i, s_data in enumerate(data.get("selvas", [])):
