@@ -42,6 +42,13 @@ class PygameView:
             print(f"No se pudo cargar o reproducir la música de fondo: {e}")
         self.buttons = self._create_buttons()
         self.graph = PopulationGraph(SIM_WIDTH + 10, SCREEN_HEIGHT - 350, UI_WIDTH - 20, 120, self.font_small)
+
+        try:
+            self.autosave_icon = pygame.image.load("assets/icono_carga.png").convert_alpha()
+            self.autosave_icon = pygame.transform.scale(self.autosave_icon, (40, 40))
+        except (pygame.error, FileNotFoundError):
+            print("Advertencia: No se pudo cargar 'assets/icono_carga.png'. El icono de autoguardado no se mostrará.")
+            self.autosave_icon = None
         self.mouse_pos = None
 
         self.hierba_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
@@ -441,7 +448,7 @@ class PygameView:
                     # Fallback a un círculo si no hay sprite
                     pygame.draw.circle(self.screen, COLOR_PEZ, (pez.x, pez.y), 4)
 
-    def draw_simulation(self, ecosistema, sim_over, animal_seleccionado, pareja_seleccionada, sim_speed):
+    def draw_simulation(self, ecosistema, sim_over, animal_seleccionado, pareja_seleccionada, sim_speed, is_autosaving=False):
         self.screen.fill(COLOR_BACKGROUND)
         
         if self.needs_static_redraw:
@@ -458,12 +465,16 @@ class PygameView:
         self._draw_clouds() # Dibujamos las nubes aquí para que se superpongan a todo
         self._draw_pareja_seleccionada(pareja_seleccionada)
         self._draw_ui(ecosistema, animal_seleccionado, pareja_seleccionada, sim_speed)
-        
+
         self._draw_text("ESC para salir", self.font_small, COLOR_TEXT, self.screen, 10, SCREEN_HEIGHT - 25)
         if self.mouse_pos and self.mouse_pos[0] < SIM_WIDTH:
             coord_text = f"({self.mouse_pos[0]}, {self.mouse_pos[1]})"
             self._draw_text(coord_text, self.font_small, COLOR_TEXT, self.screen, 10, SCREEN_HEIGHT - 45)
         
+        # Dibujar el icono de autoguardado al final para que esté por encima de todo.
+        if is_autosaving and self.autosave_icon:
+            self.screen.blit(self.autosave_icon, (10, 10))
+
         pygame.display.flip()
 
     def draw_save_menu(self, save_slots, input_text, selected_save):
