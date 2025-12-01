@@ -68,16 +68,6 @@ class SimulationController:
                 self.days_since_last_autosave += 1
                 if self.days_since_last_autosave >= self.autosave_interval:
                     self.trigger_autosave = True # Activamos el trigger para el bucle principal
-                    self.is_autosaving = True
-                    # El icono de autoguardado se mostrará en el siguiente frame.
-                    # El guardado real se hará en el siguiente ciclo del bucle principal
-                    # para no interrumpir la simulación y permitir que la UI se actualice.
-                    # Forzamos un redibujado para que el icono aparezca.
-                    self.view.draw_simulation(self.ecosistema, False, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier)
-                    print(f"Autoguardando partida en el día {self.ecosistema.dia_total}... (Intervalo: {self.autosave_interval} días)")
-                    self._action_save(autosave=True) # Guardar
-                    self.days_since_last_autosave = 0 # Reiniciar contador después de guardar
-                    self.is_autosaving = False # Ocultar el icono después de guardar
         return self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales
 
     def _setup_button_actions(self):
