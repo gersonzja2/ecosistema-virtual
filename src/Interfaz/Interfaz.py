@@ -42,13 +42,6 @@ class PygameView:
             print(f"No se pudo cargar o reproducir la música de fondo: {e}")
         self.buttons = self._create_buttons()
         self.graph = PopulationGraph(SIM_WIDTH + 10, SCREEN_HEIGHT - 350, UI_WIDTH - 20, 120, self.font_small)
-
-        try:
-            self.autosave_icon = pygame.image.load("assets/icono_carga.png").convert_alpha()
-            self.autosave_icon = pygame.transform.scale(self.autosave_icon, (40, 40))
-        except (pygame.error, FileNotFoundError):
-            print("Advertencia: No se pudo cargar 'assets/icono_carga.png'. El icono de autoguardado no se mostrará.")
-            self.autosave_icon = None
         self.mouse_pos = None
 
         self.hierba_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
@@ -303,15 +296,10 @@ class PygameView:
             # Dibujar botón de reproducción si hay un animal seleccionado
             self.buttons["force_reproduce"].draw(self.screen)
         else:
-            # Recuentos para la UI
             herb_count = sum(1 for a in ecosistema.animales if isinstance(a, Herbivoro))
             carn_count = sum(1 for a in ecosistema.animales if isinstance(a, Carnivoro))
             omni_count = sum(1 for a in ecosistema.animales if isinstance(a, Omnivoro))
-            peces_totales = sum(len(r.peces) for r in ecosistema.terreno["rios"])
-            animales_totales = len(ecosistema.animales) + peces_totales
 
-            self._draw_text(f"Animales Totales: {animales_totales}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
-            y_offset += 20
             self._draw_text(f"Herbívoros: {herb_count}", self.font_normal, COLOR_HERBIVORO, self.screen, ui_x, y_offset)
             y_offset += 20
             self._draw_text(f"Carnívoros: {carn_count}", self.font_normal, COLOR_CARNIVORO, self.screen, ui_x, y_offset)
@@ -322,6 +310,7 @@ class PygameView:
             bayas_totales = sum(s.bayas for s in ecosistema.terreno["selvas"])
             self._draw_text(f"Bayas: {bayas_totales}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
             y_offset += 20
+            peces_totales = sum(len(r.peces) for r in ecosistema.terreno["rios"])
             self._draw_text(f"Peces: {peces_totales}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
             y_offset += 20
             speed_text = f"Velocidad: x{sim_speed}"
@@ -465,16 +454,12 @@ class PygameView:
         self._draw_clouds() # Dibujamos las nubes aquí para que se superpongan a todo
         self._draw_pareja_seleccionada(pareja_seleccionada)
         self._draw_ui(ecosistema, animal_seleccionado, pareja_seleccionada, sim_speed)
-
+        
         self._draw_text("ESC para salir", self.font_small, COLOR_TEXT, self.screen, 10, SCREEN_HEIGHT - 25)
         if self.mouse_pos and self.mouse_pos[0] < SIM_WIDTH:
             coord_text = f"({self.mouse_pos[0]}, {self.mouse_pos[1]})"
             self._draw_text(coord_text, self.font_small, COLOR_TEXT, self.screen, 10, SCREEN_HEIGHT - 45)
         
-        # Dibujar el icono de autoguardado al final para que esté por encima de todo.
-        if is_autosaving and self.autosave_icon:
-            self.screen.blit(self.autosave_icon, (10, 10))
-
         pygame.display.flip()
 
     def draw_save_menu(self, save_slots, input_text, selected_save):
