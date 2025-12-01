@@ -163,15 +163,14 @@ class SimulationController:
                 # This 'else' branch is for when persistencia.cargar_partida returns (None, None, None)
                 # without raising an explicit exception, indicating a general failure or file not found.
                 error_message = f"Error al cargar la partida '{os.path.basename(self.save_path)}'. El archivo podría estar corrupto o no existe."
-                self._display_message(error_message, is_error=True)
-                self.ecosistema = Ecosistema() # Reset to a default empty ecosystem
-                self._setup_button_actions() # También reconfigurar si la carga falla
+                self._display_message(error_message, duration_ms=5000, is_error=True)
+                # No cambiamos el ecosistema, simplemente fallamos la carga y el controlador volverá al menú.
                 return False # Carga fallida o archivo no existe
         except FileNotFoundError:
             error_message = f"Error: El archivo de partida '{os.path.basename(self.save_path)}' no se encontró."
-            self._display_message(error_message, is_error=True)
-            self.ecosistema = Ecosistema()
-            self._setup_button_actions()
+            self._display_message(error_message, duration_ms=5000, is_error=True)
+            # No es necesario crear un nuevo ecosistema aquí, ya que la carga falló.
+            # El controlador manejará el regreso al menú.
             return False
         except Exception as e:
             # Catch any other unexpected errors during loading, e.g., JSON parsing errors
