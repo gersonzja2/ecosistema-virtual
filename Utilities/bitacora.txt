@@ -25,3 +25,4 @@ registro de avances par ecocistema virtual
 - se corrigieron los sonidos de los animales, y se implentaron nuevos sonidos
 
 -----
+12
