@@ -23,3 +23,5 @@ registro de avances par ecocistema virtual
 
 10-11-2025
 - se corrigieron los sonidos de los animales, y se implentaron nuevos sonidos
+
+--
