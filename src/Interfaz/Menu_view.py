@@ -42,6 +42,16 @@ class Menu:
             print("Advertencia: No se pudo cargar la imagen de fondo del menú 'fondo_menu.png'. Se usará un color sólido.")
             self.background_image = None
 
+        self.panel_background_image = None
+        try:
+            # Cargar la imagen de fondo para el panel derecho
+            panel_image_original = pygame.image.load("assets/fondo_menu_1.png").convert()
+            # Escalar la imagen para que coincida con el tamaño del panel
+            self.panel_background_image = pygame.transform.scale(panel_image_original, (UI_WIDTH, SCREEN_HEIGHT))
+        except (pygame.error, FileNotFoundError):
+            print("Advertencia: No se pudo cargar la imagen 'fondo_menu_1.png' para el panel. Se usará un color sólido.")
+            self.panel_background_image = None
+
         # Los botones se crearán dinámicamente en el método draw,
         # pero mantenemos el diccionario para acceder a sus rectángulos.
         self.buttons = {
@@ -193,7 +203,10 @@ class Menu:
         
         # Panel derecho
         panel_rect = pygame.Rect(SIM_WIDTH, 0, UI_WIDTH, SCREEN_HEIGHT)
-        pygame.draw.rect(self.screen, (40, 40, 40), panel_rect)
+        if self.panel_background_image:
+            self.screen.blit(self.panel_background_image, (SIM_WIDTH, 0))
+        else:
+            pygame.draw.rect(self.screen, (40, 40, 40), panel_rect)
         
         # --- Posicionamiento dinámico ---
         x_margin = SIM_WIDTH + 20

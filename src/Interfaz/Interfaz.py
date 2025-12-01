@@ -64,6 +64,16 @@ class PygameView:
         self.message_color = COLOR_TEXT
         self.error_color = (255, 100, 100) # Un rojo claro para errores
 
+        self.ui_background_image = None
+        try:
+            # Cargar la imagen de fondo para el panel de la UI de simulación
+            ui_image_original = pygame.image.load("assets/fondo_menu_2.png").convert()
+            # Escalar la imagen para que coincida con el tamaño del panel
+            self.ui_background_image = pygame.transform.scale(ui_image_original, (UI_WIDTH, SCREEN_HEIGHT))
+        except (pygame.error, FileNotFoundError):
+            print("Advertencia: No se pudo cargar la imagen 'fondo_menu_2.png' para el panel UI. Se usará un color sólido.")
+            self.ui_background_image = None
+
     def _load_sprites(self):
         sprites = {}
         sprite_definitions = {
@@ -283,7 +293,10 @@ class PygameView:
     def _draw_ui(self, ecosistema, animal_seleccionado, pareja_seleccionada, sim_speed):
         ui_x = SIM_WIDTH + 10
         ui_rect = pygame.Rect(SIM_WIDTH, 0, UI_WIDTH, SCREEN_HEIGHT)
-        pygame.draw.rect(self.screen, COLOR_BACKGROUND, ui_rect)
+        if self.ui_background_image:
+            self.screen.blit(self.ui_background_image, (SIM_WIDTH, 0))
+        else:
+            pygame.draw.rect(self.screen, COLOR_BACKGROUND, ui_rect)
 
         hora_str = str(ecosistema.hora_actual).zfill(2)
         self._draw_text(f"DÍA: {ecosistema.dia_total} - {hora_str}:00", self.font_header, COLOR_TEXT, self.screen, ui_x, 5)
