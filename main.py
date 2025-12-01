@@ -100,18 +100,18 @@ class SimulationController:
         for name, cls in animal_map.items():
             self.button_actions[f"add_{name}"] = lambda species=cls: self.ecosistema.agregar_animal(species)
 
-    def _save_in_background(self, save_path):
+    def _save_in_background(self, save_path, sim_speed, autosave_interval):
         """
         Copia el ecosistema y lo guarda en un hilo separado para no bloquear la simulación.
         """
         ecosistema_copiado = deepcopy(self.ecosistema)
-        persistencia.guardar_partida(ecosistema_copiado, save_path, autosave=True)
+        persistencia.guardar_partida(ecosistema_copiado, save_path, autosave=True, sim_speed_multiplier=sim_speed, autosave_interval=autosave_interval)
 
         
     def _action_save(self, autosave=False):
         """Utiliza la clase Persistencia para guardar el estado del ecosistema."""
         if self.save_path:
-            persistencia.guardar_partida(self.ecosistema, self.save_path, autosave=autosave)
+            persistencia.guardar_partida(self.ecosistema, self.save_path, autosave=autosave, sim_speed_multiplier=self.sim_speed_multiplier, autosave_interval=self.autosave_interval)
         else:
             print("Error: No hay una ruta de guardado definida.")
 
@@ -119,13 +119,14 @@ class SimulationController:
         """Utiliza la clase Persistencia para cargar el estado del ecosistema.
         Devuelve True si la carga fue exitosa, False en caso contrario."""
         if self.save_path:
-            # Guardar el intervalo de autoguardado seleccionado antes de que se reinicie el ecosistema
-            autosave_setting = self.autosave_interval
-            loaded_ecosystem = persistencia.cargar_partida(self.save_path)
+            loaded_ecosystem, loaded_speed, loaded_autosave = persistencia.cargar_partida(self.save_path)
             if loaded_ecosystem:
                 self.ecosistema = loaded_ecosystem
                 self.view.graph.history.clear()
-                self.autosave_interval = autosave_setting # Restaurar el intervalo
+                # Restaurar configuraciones si se encontraron en el archivo de guardado
+                if loaded_speed is not None: self.sim_speed_multiplier = loaded_speed
+                if loaded_autosave is not None: self.autosave_interval = loaded_autosave
+
                 # Restaurar configuraciones de la simulación desde el ecosistema cargado
                 self.ecosistema.activar_modo_caza_carnivoro(forzar_estado=self.ecosistema.modo_caza_carnivoro_activo)
                 # Actualizar el texto del botón de caza en la vista
@@ -266,7 +267,7 @@ class SimulationController:
                     
                     print(f"Autoguardando partida... (Intervalo: {self.autosave_interval} días)")
                     # Iniciar el guardado en un hilo separado para no pausar la simulación.
-                    save_thread = threading.Thread(target=self._save_in_background, args=(self.save_path,))
+                    save_thread = threading.Thread(target=self._save_in_background, args=(self.save_path, self.sim_speed_multiplier, self.autosave_interval))
                     save_thread.start()
 
                 self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier, self.is_autosaving)
@@ -433,7 +434,7 @@ class SimulationController:
 
                     # Guardar la partida
                     new_save_path = os.path.join("saves", self.current_user, save_name)
-                    persistencia.guardar_partida(self.ecosistema, new_save_path)
+                    persistencia.guardar_partida(self.ecosistema, new_save_path, sim_speed_multiplier=self.sim_speed_multiplier, autosave_interval=self.autosave_interval)
                     self.save_path = new_save_path # Actualizar la ruta de guardado actual
                     
                     # Volver a la simulación

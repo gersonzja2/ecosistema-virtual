@@ -7,7 +7,7 @@ from ..Logica.Logica import Ecosistema
 # Versión actual del simulador. Cambiar si la estructura de guardado se modifica.
 SIMULATOR_VERSION = "1.0"
 
-def guardar_partida(ecosistema: Ecosistema, ruta_archivo: str, autosave=False):
+def guardar_partida(ecosistema: Ecosistema, ruta_archivo: str, autosave=False, sim_speed_multiplier=None, autosave_interval=None):
     """
     Guarda el estado del ecosistema de forma segura (atómica).
     1. Crea un backup del archivo de guardado existente.
@@ -29,7 +29,7 @@ def guardar_partida(ecosistema: Ecosistema, ruta_archivo: str, autosave=False):
 
         # 2. Escribir en el archivo temporal
         with open(ruta_temporal, 'w', encoding='utf-8') as f:
-            datos = ecosistema.to_dict()
+            datos = ecosistema.to_dict(sim_speed_multiplier, autosave_interval)
             datos['metadata'] = {
                 "save_date": datetime.now().isoformat(),
                 "in_game_day": ecosistema.dia_total,
@@ -68,7 +68,7 @@ def cargar_partida(ruta_archivo: str) -> Ecosistema:
             print(f"Advertencia: No se encontró el archivo de guardado. Cargando desde respaldo {ruta_respaldo}")
             ruta_archivo = ruta_respaldo
         else:
-            return None
+            return None, None, None
 
     try:
         with open(ruta_archivo, 'r', encoding='utf-8') as f:
@@ -82,12 +82,12 @@ def cargar_partida(ruta_archivo: str) -> Ecosistema:
                 print(f"  Versión del guardado: {version_guardado or 'Desconocida'}")
                 print(f"  Versión del simulador: {SIMULATOR_VERSION}")
                 print("  No se puede cargar la partida para evitar errores.")
-                return None
+                return None, None, None
 
             return Ecosistema.from_dict(datos)
     except (json.JSONDecodeError, IOError) as e:
         print(f"Error al cargar la partida desde {ruta_archivo}: {e}. Se devolverá None.")
-        return None
+        return None, None, None
 
 def obtener_lista_usuarios():
     """Devuelve una lista con los nombres de los directorios de usuario en 'saves'."""

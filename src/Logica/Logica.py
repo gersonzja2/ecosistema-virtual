@@ -408,7 +408,7 @@ class Ecosistema:
                         animal.estado = "regresando_a_zona"
                     animal.objetivo_comida = None # Cancela cualquier caza actual
 
-    def to_dict(self):
+    def to_dict(self, sim_speed_multiplier=None, autosave_interval=None):
         """Convierte el estado del ecosistema a un diccionario serializable."""
         cantidad_plantas = (
             len(self.terreno.get("arboles", [])) +
@@ -424,6 +424,10 @@ class Ecosistema:
             "cantidad_animales": cantidad_total_animales,
             "cantidad_plantas": cantidad_plantas,
             "modo_caza_carnivoro_activo": self.modo_caza_carnivoro_activo,
+            "configuraciones": {
+                "sim_speed_multiplier": sim_speed_multiplier,
+                "autosave_interval": autosave_interval
+            },
             "grid_hierba": self.grid_hierba,
             "clima_actual": self.clima_actual,
             "selvas": [{"rect": list(s.rect), "bayas": s.bayas} for s in self.terreno["selvas"]],
@@ -455,6 +459,12 @@ class Ecosistema:
         ecosistema.grid_hierba = data.get("grid_hierba", ecosistema.grid_hierba)
         ecosistema.clima_actual = data.get("clima_actual", ecosistema.clima_actual)
         ecosistema.modo_caza_carnivoro_activo = data.get("modo_caza_carnivoro_activo", False)
+
+        # Cargar configuraciones
+        configuraciones = data.get("configuraciones", {})
+        # Devolvemos estos valores para que el controlador los pueda usar
+        sim_speed_multiplier = configuraciones.get("sim_speed_multiplier")
+        autosave_interval = configuraciones.get("autosave_interval")
 
         # Cargar terrenos
         for i, s_data in enumerate(data.get("selvas", [])):
@@ -524,4 +534,4 @@ class Ecosistema:
             carcasa.dias_descomposicion = c_data.get("dias", 0)
             ecosistema.recursos["carcasas"].append(carcasa)
 
-        return ecosistema
+        return ecosistema, sim_speed_multiplier, autosave_interval
