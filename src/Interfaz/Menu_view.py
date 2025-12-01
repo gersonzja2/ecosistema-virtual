@@ -15,8 +15,8 @@ class Menu:
         self.selected_save_cycle = None
         self.selected_save_date = None
         self.input_text = ""
-        self.input_active = False
-        self.autosave_options = [None, 10, 30, 50] # None significa Desactivado
+        self.input_active = False # Para la creación de usuarios
+        self.autosave_options = [None, 10, 30, 50]  # None significa Desactivado
         self.rename_user_active = False
         self.current_autosave_index = 0
         self.scroll_x = 0
@@ -44,12 +44,13 @@ class Menu:
         self.buttons = {
             "new_user": None, "rename_user": None, "delete_user": None,
             "new_save": None, "rename_save": None, "delete_save": None,
-            "start_game": None
+            "start_game": None, "autosave": None
         }
         # Rectángulos para elementos de lista (que no son botones fijos)
         self.list_rects = {
             "users": [], "saves": []
         }
+        self.selected_autosave_interval = self.autosave_options[self.current_autosave_index]
 
     def handle_event(self, event):
         """Maneja los eventos de Pygame para el menú."""
@@ -80,7 +81,7 @@ class Menu:
                 "type": "start_game",
                 "user": self.selected_user,
                 "save": self.selected_save,
-                "autosave": self.autosave_options[self.current_autosave_index],
+                "autosave": self.selected_autosave_interval,
             }
 
         # Lógica para elementos que aparecen después de seleccionar un usuario
@@ -120,7 +121,14 @@ class Menu:
                     elif name == "delete_save" and self.selected_user and self.selected_save:
                         return {"type": "delete_save", "user": self.selected_user, "save": self.selected_save}
                     elif name == "start_game" and self.selected_user and self.selected_save:
-                        return {"type": "start_game", "user": self.selected_user, "save": self.selected_save}
+                        return {"type": "start_game", "user": self.selected_user, "save": self.selected_save, "autosave": self.selected_autosave_interval}
+                    elif name == "autosave":
+                        self.current_autosave_index = (self.current_autosave_index + 1) % len(self.autosave_options)
+                        self.selected_autosave_interval = self.autosave_options[self.current_autosave_index]
+                        # Devolvemos un comando para que el controlador pueda estar al tanto si es necesario
+                        return {"type": "set_autosave", "interval": self.selected_autosave_interval}
+
+
 
             # Comprobar clics en elementos de lista (usuarios y partidas)
             for i, (user, rect) in enumerate(self.list_rects["users"]):
@@ -157,7 +165,7 @@ class Menu:
                     self.input_save_active = False
                     self.input_text = ""
                     # Se devuelve el comando para iniciar el juego con la nueva partida
-                    return {"type": "start_game", "user": self.selected_user, "save": self.selected_save}
+                    return {"type": "start_game", "user": self.selected_user, "save": self.selected_save, "autosave": self.selected_autosave_interval}
                 elif self.rename_user_active and self.input_text and self.selected_user:
                     new_name = self.input_text.strip().replace(" ", "_")
                     command = {
@@ -336,5 +344,21 @@ class Menu:
                 start_text = "Cargar"
                 start_surf = self.font_normal.render(start_text, True, COLOR_TEXT)
                 self.screen.blit(start_surf, (self.buttons["start_game"].centerx - start_surf.get_width() // 2, self.buttons["start_game"].centery - start_surf.get_height() // 2))
+
+        # --- Sección de Autoguardado ---
+        # Se muestra siempre en la parte inferior derecha del panel.
+        autosave_y = SCREEN_HEIGHT - 50
+        self.buttons["autosave"] = pygame.Rect(x_margin, autosave_y, UI_WIDTH - 40, 35)
+        
+        # Texto del botón
+        interval = self.selected_autosave_interval
+        if interval is None:
+            autosave_text = "Autoguardado: Desactivado"
+        else:
+            autosave_text = f"Autoguardado: Cada {interval} días"
+        
+        pygame.draw.rect(self.screen, COLOR_BUTTON, self.buttons["autosave"])
+        autosave_surf = self.font_small.render(autosave_text, True, COLOR_TEXT)
+        self.screen.blit(autosave_surf, (self.buttons["autosave"].centerx - autosave_surf.get_width() // 2, self.buttons["autosave"].centery - autosave_surf.get_height() // 2))
 
         pygame.display.flip()
