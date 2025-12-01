@@ -15,8 +15,11 @@ class Menu:
         self.selected_save_cycle = None
         self.selected_save_date = None
         self.input_text = ""
-        self.input_active = False
+        self.input_active = False # Este parece ser un remanente, lo mantenemos por si acaso pero no se usa en la lógica nueva.
+        self.input_user_active = False
+        self.input_save_active = False
         self.autosave_options = [None, 10, 30, 50] # None significa Desactivado
+        self.rename_active = False
         self.rename_user_active = False
         self.current_autosave_index = 0
         self.scroll_x = 0
@@ -53,23 +56,20 @@ class Menu:
 
     def handle_event(self, event):
         """Maneja los eventos de Pygame para el menú."""
-        if event.type == pygame.KEYDOWN and self.input_active:
-            if event.key == pygame.K_RETURN:
-                if self.input_text:
-                    username = self.input_text
-                    self.input_active = False
-                    self.input_text = ""
-                    return {"type": "create_user", "username": username}
-            elif event.key == pygame.K_BACKSPACE:
-                self.input_text = self.input_text[:-1]
-            else:
-                self.input_text += event.unicode
-            return None # El evento de teclado ha sido manejado
+        # Primero, manejar eventos de teclado si un campo de texto está activo
+        is_input_active = self.input_user_active or self.input_save_active or self.rename_user_active or self.rename_active
+        if event.type == pygame.KEYDOWN and is_input_active:
+            return self.handle_text_input(event)
 
-        if event.type != pygame.MOUSEBUTTONDOWN:
-            return None
+        # Luego, manejar clics del ratón
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            return self.handle_mouse_click(event)
 
-        # Lógica para botones que están siempre visibles o se activan con estados
+        return None
+
+    def handle_mouse_click(self, event):
+        """Procesa los clics del ratón en botones y listas."""
+        # Lógica para botones que están siempre visibles o se activan con estados (código original movido aquí)
         if self.buttons["new_user"].collidepoint(event.pos):
             self.input_active = True
             self.input_text = ""
@@ -83,107 +83,88 @@ class Menu:
                 "autosave": self.autosave_options[self.current_autosave_index],
             }
 
-        # Lógica para elementos que aparecen después de seleccionar un usuario
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            # Comprobar clics en botones
-            for name, rect in self.buttons.items():
-                if rect and rect.collidepoint(event.pos):
-                    # El código a continuación se ejecutará si se hace clic en un botón
-                    if name == "new_user":
-                        self.input_user_active = True
-                        self.rename_user_active = False
-                        self.rename_active = False
-                        self.input_save_active = False
-                        self.input_text = ""
-                        return None
-                    elif name == "new_save" and self.selected_user:
-                        self.input_save_active = True
-                        self.input_user_active = False
-                        self.rename_user_active = False
-                        self.rename_active = False
-                        self.input_text = ""
-                        return None
-                    elif name == "rename_user" and self.selected_user:
-                        self.rename_user_active = True
-                        self.input_user_active = False
-                        self.input_text = self.selected_user
-                        return None
-                    elif name == "delete_user" and self.selected_user:
-                        return {"type": "delete_user", "username": self.selected_user}
-                    elif name == "rename_save" and self.selected_save:
-                        self.rename_active = True
-                        self.input_save_active = False
-                        self.input_user_active = False
-                        self.rename_user_active = False
-                        self.input_text = self.selected_save.replace(".json", "").replace("_", " ")
-                        return None
-                    elif name == "delete_save" and self.selected_user and self.selected_save:
-                        return {"type": "delete_save", "user": self.selected_user, "save": self.selected_save}
-                    elif name == "start_game" and self.selected_user and self.selected_save:
-                        return {"type": "start_game", "user": self.selected_user, "save": self.selected_save}
-
-            # Comprobar clics en elementos de lista (usuarios y partidas)
-            for i, (user, rect) in enumerate(self.list_rects["users"]):
-                if rect.collidepoint(event.pos):
-                    self.selected_user = user
-                    self.selected_save = None
-                    self.selected_save_population = None
-                    self.selected_save_cycle = None
-                    self.selected_save_date = None
-                    self.rename_user_active = False
-                    self.rename_active = False
-                    self.input_save_active = False
-                    return {"type": "select_user", "username": user}
-
-            if self.selected_user:
-                for i, (save, rect) in enumerate(self.list_rects["saves"]):
-                    if rect.collidepoint(event.pos):
-                        self.selected_save = save
-                        self.rename_active = False
-                        return {"type": "select_save", "user": self.selected_user, "save": save}
-
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_RETURN:
-                if self.input_user_active and self.input_text:
-                    username = self.input_text
-                    self.input_user_active = False
+        # Comprobar clics en botones
+        for name, rect in self.buttons.items():
+            if rect and rect.collidepoint(event.pos):
+                if name == "new_user":
+                    self.input_user_active = True; self.rename_user_active = False; self.rename_active = False; self.input_save_active = False
                     self.input_text = ""
-                    return {"type": "create_user", "username": username}
-                elif self.input_save_active and self.input_text and self.selected_user:
-                    # Cuando se confirma el nombre de la nueva partida, se inicia el juego
-                    # El nombre se limpia y se le añade .json
-                    save_name = self.input_text.strip().replace(" ", "_") + ".json"
-                    self.selected_save = save_name
-                    self.input_save_active = False
+                    return None
+                elif name == "new_save" and self.selected_user:
+                    self.input_save_active = True; self.input_user_active = False; self.rename_user_active = False; self.rename_active = False
                     self.input_text = ""
-                    # Se devuelve el comando para iniciar el juego con la nueva partida
+                    return None
+                elif name == "rename_user" and self.selected_user:
+                    self.rename_user_active = True; self.input_user_active = False; self.rename_active = False; self.input_save_active = False
+                    self.input_text = self.selected_user
+                    return None
+                elif name == "delete_user" and self.selected_user:
+                    return {"type": "delete_user", "username": self.selected_user}
+                elif name == "rename_save" and self.selected_save:
+                    self.rename_active = True; self.input_save_active = False; self.input_user_active = False; self.rename_user_active = False
+                    self.input_text = self.selected_save["filename"].replace(".json", "").replace("_", " ")
+                    return None
+                elif name == "delete_save" and self.selected_user and self.selected_save:
+                    return {"type": "delete_save", "user": self.selected_user, "save": self.selected_save}
+                elif name == "start_game" and self.selected_user and self.selected_save:
                     return {"type": "start_game", "user": self.selected_user, "save": self.selected_save}
-                elif self.rename_user_active and self.input_text and self.selected_user:
-                    new_name = self.input_text.strip().replace(" ", "_")
-                    command = {
-                        "type": "rename_user",
-                        "old_name": self.selected_user,
-                        "new_name": new_name
-                    }
-                    self.rename_user_active = False
-                    self.input_text = ""
-                    return command
-                elif self.rename_active and self.input_text and self.selected_user and self.selected_save:
-                    new_name = self.input_text.strip().replace(" ", "_") + ".json"
-                    command = {
-                        "type": "rename_save",
-                        "user": self.selected_user,
-                        "old_name": self.selected_save["filename"], # Pasar solo el nombre del archivo
-                        "new_name": new_name
-                    }
-                    self.rename_active = False
-                    return command
 
-            elif event.key == pygame.K_BACKSPACE:
-                self.input_text = self.input_text[:-1]
-            else:
-                self.input_text += event.unicode
-        
+        # Comprobar clics en elementos de lista (usuarios y partidas)
+        for i, (user, rect) in enumerate(self.list_rects["users"]):
+            if rect.collidepoint(event.pos):
+                self.selected_user = user
+                self.selected_save = None; self.selected_save_population = None; self.selected_save_cycle = None; self.selected_save_date = None
+                self.rename_user_active = False; self.rename_active = False; self.input_save_active = False; self.input_user_active = False
+                return {"type": "select_user", "username": user}
+
+        if self.selected_user:
+            for i, (save, rect) in enumerate(self.list_rects["saves"]):
+                if rect.collidepoint(event.pos):
+                    self.selected_save = save
+                    self.rename_active = False
+                    return {"type": "select_save", "user": self.selected_user, "save": save}
+        return None
+
+    def handle_text_input(self, event):
+        """Procesa la entrada de teclado para los campos de texto activos."""
+        if event.key == pygame.K_RETURN:
+            if self.input_user_active and self.input_text:
+                username = self.input_text
+                self.input_user_active = False
+                self.input_text = ""
+                return {"type": "create_user", "username": username}
+            elif self.input_save_active and self.input_text and self.selected_user:
+                save_name = {"filename": self.input_text.strip().replace(" ", "_") + ".json", "metadata": None}
+                self.selected_save = save_name
+                self.input_save_active = False
+                self.input_text = ""
+                return {"type": "start_game", "user": self.selected_user, "save": self.selected_save}
+            elif self.rename_user_active and self.input_text and self.selected_user:
+                new_name = self.input_text.strip().replace(" ", "_")
+                command = {
+                    "type": "rename_user",
+                    "old_name": self.selected_user,
+                    "new_name": new_name
+                }
+                self.rename_user_active = False
+                self.input_text = ""
+                return command
+            elif self.rename_active and self.input_text and self.selected_user and self.selected_save:
+                new_name = self.input_text.strip().replace(" ", "_") + ".json"
+                command = {
+                    "type": "rename_save",
+                    "user": self.selected_user,
+                    "old_name": self.selected_save["filename"],
+                    "new_name": new_name
+                }
+                self.rename_active = False
+                self.input_text = ""
+                return command
+
+        elif event.key == pygame.K_BACKSPACE:
+            self.input_text = self.input_text[:-1]
+        elif event.unicode:
+            self.input_text += event.unicode
         return None
 
     def draw(self):
@@ -234,7 +215,7 @@ class Menu:
         # Botón/Input para nuevo usuario
         self.buttons["new_user"] = pygame.Rect(x_margin, current_y, UI_WIDTH - 40, 35)
         pygame.draw.rect(self.screen, COLOR_BUTTON, self.buttons["new_user"])
-        if self.input_active or self.rename_user_active:
+        if self.input_user_active or self.rename_user_active:
             input_surf = self.font_normal.render(self.input_text + "|", True, COLOR_TEXT)
         else:
             input_surf = self.font_normal.render("Crear Nuevo Usuario", True, COLOR_TEXT)
@@ -269,7 +250,11 @@ class Menu:
 
             self.list_rects["saves"] = [] # Limpiar rectángulos de la iteración anterior
             for i, save in enumerate(self.saves or []):
-                color = COLOR_SELECTED if save["filename"] == self.selected_save else COLOR_TEXT
+                is_selected = False
+                if self.selected_save and isinstance(self.selected_save, dict):
+                    is_selected = (save["filename"] == self.selected_save.get("filename"))
+
+                color = COLOR_SELECTED if is_selected else COLOR_TEXT
                 save_name = save["filename"].replace(".json", "").replace("_", " ").capitalize()
                 save_surf = self.font_normal.render(save_name, True, color)
                 save_rect = self.screen.blit(save_surf, (list_x_offset, current_y + 5))

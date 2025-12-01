@@ -285,7 +285,8 @@ class SimulationController:
                         self.menu.saves = persistencia.obtener_partidas_usuario(command["user"])
 
                 elif command_type == "delete_save":
-                    success = persistencia.eliminar_partida(command["user"], command["save"])
+                    save_filename = command["save"]["filename"] # Extraer el nombre de archivo del diccionario
+                    success = persistencia.eliminar_partida(command["user"], save_filename)
                     if success:
                         # Actualizar la vista del menú para reflejar la eliminación
                         self.menu.selected_save = None
