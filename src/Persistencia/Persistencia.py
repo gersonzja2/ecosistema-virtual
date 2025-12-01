@@ -62,12 +62,14 @@ def cargar_partida(ruta_archivo: str) -> Ecosistema:
     Si el archivo no existe, devuelve un nuevo Ecosistema.
     """
     if not os.path.exists(ruta_archivo):
-        # Si el archivo principal no existe, intenta cargar desde un respaldo.
+        # Si el archivo principal no existe, intenta cargar desde el respaldo.
         ruta_respaldo = ruta_archivo + ".bak"
         if os.path.exists(ruta_respaldo):
             print(f"Advertencia: No se encontró el archivo de guardado. Cargando desde respaldo {ruta_respaldo}")
             ruta_archivo = ruta_respaldo
         else:
+            # Si no existe ni el principal ni el respaldo, no hay nada que cargar.
+            print(f"No se encontró el archivo de guardado ni un respaldo para '{os.path.basename(ruta_archivo)}'.")
             return None, None, None
 
     try:
