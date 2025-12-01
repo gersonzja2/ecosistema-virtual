@@ -1,5 +1,7 @@
 import pygame
 import os
+import threading
+from copy import deepcopy
 from src.Logica.Logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto
 from src.Interfaz.Interfaz import PygameView
 from src.Interfaz.Menu_view import Menu
@@ -97,6 +99,14 @@ class SimulationController:
         # Mapeo dinámico para los botones de "añadir animal"
         for name, cls in animal_map.items():
             self.button_actions[f"add_{name}"] = lambda species=cls: self.ecosistema.agregar_animal(species)
+
+    def _save_in_background(self, save_path):
+        """
+        Copia el ecosistema y lo guarda en un hilo separado para no bloquear la simulación.
+        """
+        ecosistema_copiado = deepcopy(self.ecosistema)
+        persistencia.guardar_partida(ecosistema_copiado, save_path, autosave=True)
+
         
     def _action_save(self, autosave=False):
         """Utiliza la clase Persistencia para guardar el estado del ecosistema."""
@@ -254,11 +264,10 @@ class SimulationController:
                     self.is_autosaving = True
                     self.autosave_icon_end_time = pygame.time.get_ticks() + 3000 # 3 segundos
                     
-                    # Forzamos el dibujado del icono ANTES de la operación de guardado, que puede bloquear el programa.
-                    self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier, self.is_autosaving)
-                    
                     print(f"Autoguardando partida... (Intervalo: {self.autosave_interval} días)")
-                    self._action_save(autosave=True)
+                    # Iniciar el guardado en un hilo separado para no pausar la simulación.
+                    save_thread = threading.Thread(target=self._save_in_background, args=(self.save_path,))
+                    save_thread.start()
 
                 self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier, self.is_autosaving)
             

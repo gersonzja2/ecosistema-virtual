@@ -45,7 +45,7 @@ class PygameView:
  
         try:
             self.autosave_icon = pygame.image.load("assets/icono_carga.png").convert_alpha()
-            self.autosave_icon = pygame.transform.scale(self.autosave_icon, (40, 40))
+            self.autosave_icon = pygame.transform.scale(self.autosave_icon, (50, 50))
         except (pygame.error, FileNotFoundError):
             print("Advertencia: No se pudo cargar 'assets/icono_carga.png'. El icono de autoguardado no se mostrará.")
             self.autosave_icon = None
