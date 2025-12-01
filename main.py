@@ -67,7 +67,20 @@ class SimulationController:
             if self.autosave_interval is not None and self.autosave_interval > 0:
                 self.days_since_last_autosave += 1
                 if self.days_since_last_autosave >= self.autosave_interval:
+<<<<<<< HEAD
                     self.trigger_autosave = True # Activamos el trigger para el bucle principal
+=======
+                    self.is_autosaving = True
+                    # El icono de autoguardado se mostrará en el siguiente frame.
+                    # El guardado real se hará en el siguiente ciclo del bucle principal
+                    # para no interrumpir la simulación y permitir que la UI se actualice.
+                    # Forzamos un redibujado para que el icono aparezca.
+                    self.view.draw_simulation(self.ecosistema, False, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier)
+                    print(f"Autoguardando partida en el día {self.ecosistema.dia_total}... (Intervalo: {self.autosave_interval} días)")
+                    self._action_save(autosave=True) # Guardar
+                    self.days_since_last_autosave = 0 # Reiniciar contador después de guardar
+                    self.is_autosaving = False # Ocultar el icono después de guardar
+>>>>>>> 25b16c45563a269117e7427e6a67152c69787740
         return self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales
 
     def _setup_button_actions(self):
@@ -240,9 +253,15 @@ class SimulationController:
 
                 if not self.paused and not sim_over and delta_time > self.base_time_per_hour / self.sim_speed_multiplier:
                     sim_over = self._avanzar_hora()
+<<<<<<< HEAD
                     self.last_update_time = current_time                    
 
                 running, sim_over = self.handle_simulation_events(running, sim_over)
+=======
+                    self.last_update_time = current_time
+                    
+                running, sim_over = self.handle_simulation_events(running, sim_over) # type: ignore
+>>>>>>> 25b16c45563a269117e7427e6a67152c69787740
 
                 # --- Lógica de Autoguardado ---
                 if self.trigger_autosave:
