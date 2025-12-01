@@ -58,6 +58,12 @@ class PygameView:
         self.middle_clouds = self._create_clouds(y_range=(SCREEN_HEIGHT // 3 + 10, SCREEN_HEIGHT // 2 - 70), count=5)
         self.bottom_clouds = self._create_clouds(y_range=(SCREEN_HEIGHT // 2 + 60, SCREEN_HEIGHT - 70), count=8)
 
+        # Atributos para mensajes temporales
+        self.current_message = None
+        self.message_end_time = None
+        self.message_color = COLOR_TEXT
+        self.error_color = (255, 100, 100) # Un rojo claro para errores
+
     def _load_sprites(self):
         sprites = {}
         sprite_definitions = {
@@ -471,6 +477,25 @@ class PygameView:
         if is_autosaving and self.autosave_icon:
             self.screen.blit(self.autosave_icon, (10, 10))
  
+        # Dibujar mensaje temporal si está activo
+        if self.current_message and pygame.time.get_ticks() < self.message_end_time:
+            # Fondo semitransparente para el mensaje para mejorar la legibilidad
+            text_surf = self.font_normal.render(self.current_message, True, self.message_color)
+            text_rect = text_surf.get_rect()
+            
+            # Crear un rectángulo de fondo un poco más grande que el texto
+            bg_rect = text_rect.inflate(20, 20)
+            bg_rect.center = (SIM_WIDTH // 2, SCREEN_HEIGHT // 2)
+            text_rect.center = bg_rect.center
+
+            # Dibujar el fondo y luego el texto
+            bg_surf = pygame.Surface(bg_rect.size, pygame.SRCALPHA)
+            bg_surf.fill((20, 30, 40, 200)) # Color oscuro semitransparente
+            self.screen.blit(bg_surf, bg_rect)
+            self.screen.blit(text_surf, text_rect)
+        else:
+            self.current_message = None
+
         pygame.display.flip()
 
     def draw_save_menu(self, save_slots, input_text, selected_save):
@@ -569,6 +594,12 @@ class PygameView:
         self.screen.blit(instructions_text_2, (box_x + (box_width - instructions_text_2.get_width()) // 2, box_y + box_height - 40))
 
         pygame.display.flip()
+
+    def display_message(self, message, duration_ms=3000, is_error=False):
+        """Prepara un mensaje para ser mostrado en pantalla por un tiempo determinado."""
+        self.current_message = message
+        self.message_end_time = pygame.time.get_ticks() + duration_ms
+        self.message_color = self.error_color if is_error else COLOR_TEXT
 
     def close(self):
         try:

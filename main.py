@@ -116,19 +116,36 @@ class SimulationController:
         else:
             print("Error: No hay una ruta de guardado definida.")
 
+    def _display_message(self, message, duration_ms=3000, is_error=False):
+        """Muestra un mensaje temporal en la pantalla a través de la vista."""
+        # Asume que PygameView tiene un método display_message(message, duration_ms, is_error)
+        self.view.display_message(message, duration_ms, is_error)
+
     def _action_load(self):
         """Utiliza la clase Persistencia para cargar el estado del ecosistema.
         Devuelve True si la carga fue exitosa, False en caso contrario."""
-        if self.save_path:
+        if not self.save_path:
+            self._display_message("Error: No se ha seleccionado una ruta de guardado.", is_error=True)
+            return False
+
+        try:
             loaded_ecosystem, loaded_speed, loaded_autosave = persistencia.cargar_partida(self.save_path)
             if loaded_ecosystem:
                 self.ecosistema = loaded_ecosystem
                 self.view.graph.history.clear()
                 # Restaurar configuraciones si se encontraron en el archivo de guardado
-                if loaded_speed is not None: self.sim_speed_multiplier = loaded_speed
-                if loaded_autosave is not None: self.autosave_interval = loaded_autosave
+                if loaded_speed is not None:
+                    self.sim_speed_multiplier = loaded_speed
+                if loaded_autosave is not None:
+                    self.autosave_interval = loaded_autosave
 
                 # Restaurar configuraciones de la simulación desde el ecosistema cargado
+                # Asegurarse de que el modo de caza se restaure correctamente
+                # (el estado se guarda en el ecosistema, pero el botón de la vista necesita actualizarse)
+                # Si el ecosistema cargado no tiene este atributo, se inicializará a False por defecto.
+                if not hasattr(self.ecosistema, 'modo_caza_carnivoro_activo'):
+                    self.ecosistema.modo_caza_carnivoro_activo = False
+                
                 self.ecosistema.activar_modo_caza_carnivoro(forzar_estado=self.ecosistema.modo_caza_carnivoro_activo)
                 # Actualizar el texto del botón de caza en la vista
                 if self.ecosistema.modo_caza_carnivoro_activo:
@@ -137,11 +154,29 @@ class SimulationController:
                     self.view.buttons["hunt"].text = "Cazar Herbívoros"
                 self._setup_button_actions() # Volver a configurar las acciones con el nuevo ecosistema
                 self.view.needs_static_redraw = True
+                self._display_message(f"Partida '{os.path.basename(self.save_path)}' cargada con éxito.", is_error=False)
                 return True # Carga exitosa
             else:
-                self.ecosistema = Ecosistema()
+                # This 'else' branch is for when persistencia.cargar_partida returns (None, None, None)
+                # without raising an explicit exception, indicating a general failure or file not found.
+                error_message = f"Error al cargar la partida '{os.path.basename(self.save_path)}'. El archivo podría estar corrupto o no existe."
+                self._display_message(error_message, is_error=True)
+                self.ecosistema = Ecosistema() # Reset to a default empty ecosystem
                 self._setup_button_actions() # También reconfigurar si la carga falla
                 return False # Carga fallida o archivo no existe
+        except FileNotFoundError:
+            error_message = f"Error: El archivo de partida '{os.path.basename(self.save_path)}' no se encontró."
+            self._display_message(error_message, is_error=True)
+            self.ecosistema = Ecosistema()
+            self._setup_button_actions()
+            return False
+        except Exception as e:
+            # Catch any other unexpected errors during loading, e.g., JSON parsing errors
+            error_message = f"Error inesperado al cargar la partida '{os.path.basename(self.save_path)}': {e}"
+            self.ecosistema = Ecosistema()
+            self._setup_button_actions()
+            self._display_message(error_message, is_error=True)
+            return False
 
     def _action_restart(self):
         self.ecosistema = Ecosistema()
@@ -498,7 +533,9 @@ class SimulationController:
                         load_successful = self._action_load()
                         if not load_successful:
                             # Si por alguna razón falla, volvemos al menú
+                            # _action_load ya muestra el mensaje de error.
                             self.current_state = "MENU"
+                            self.paused = True # Asegurarse de que el menú esté pausado
                         else:
                             self.current_state = "SIMULATION"
                             self.paused = False # Iniciar la simulación activa
