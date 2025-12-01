@@ -355,7 +355,6 @@ class SimulationController:
                 if event.type == pygame.QUIT:
                     running = False # Termina el bucle principal
                     break
-                self._action_save() # Guardar al salir
                 self.current_state = "MENU" # Volver al menú
             elif command_type == "toggle_music":
                 self.view.toggle_music()
