@@ -23,6 +23,8 @@ class SimulationController:
         self.autosave_interval = None # Días entre autoguardados. None para desactivado.
         self.days_since_last_autosave = 0
         self.is_autosaving = False # Flag para mostrar el icono
+        self.trigger_autosave = False # Flag para iniciar el proceso de guardado en el bucle principal
+        self.autosave_icon_end_time = None # Temporizador para la visibilidad del icono
 
         self.animal_seleccionado = None
         self.pareja_seleccionada = None
@@ -65,6 +67,9 @@ class SimulationController:
             if self.autosave_interval is not None and self.autosave_interval > 0:
                 self.days_since_last_autosave += 1
                 if self.days_since_last_autosave >= self.autosave_interval:
+<<<<<<< HEAD
+                    self.trigger_autosave = True # Activamos el trigger para el bucle principal
+=======
                     self.is_autosaving = True
                     # El icono de autoguardado se mostrará en el siguiente frame.
                     # El guardado real se hará en el siguiente ciclo del bucle principal
@@ -75,6 +80,7 @@ class SimulationController:
                     self._action_save(autosave=True) # Guardar
                     self.days_since_last_autosave = 0 # Reiniciar contador después de guardar
                     self.is_autosaving = False # Ocultar el icono después de guardar
+>>>>>>> 25b16c45563a269117e7427e6a67152c69787740
         return self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales
 
     def _setup_button_actions(self):
@@ -117,6 +123,7 @@ class SimulationController:
                 self.ecosistema = loaded_ecosystem
                 self.view.graph.history.clear()
                 # Restaurar configuraciones de la simulación desde el ecosistema cargado
+                self.days_since_last_autosave = 0 # Reiniciar contador de autoguardado
                 self.ecosistema.activar_modo_caza_carnivoro(forzar_estado=self.ecosistema.modo_caza_carnivoro_activo)
                 # Actualizar el texto del botón de caza en la vista
                 if self.ecosistema.modo_caza_carnivoro_activo:
@@ -137,6 +144,7 @@ class SimulationController:
         self.view.graph.history.clear()
         self.animal_seleccionado = None
         self.pareja_seleccionada = None
+        self.days_since_last_autosave = 0 # Reiniciar contador de autoguardado
         self.view.needs_static_redraw = True
         self.paused = True
         # No es necesario reiniciar sim_over aquí, ya que se gestiona en el bucle principal.
@@ -227,6 +235,8 @@ class SimulationController:
                 # Esto asegura que los cambios (nuevas partidas, renombrados) se reflejen.
                 self.menu.users = persistencia.obtener_lista_usuarios()
                 if self.menu.selected_user:
+                    # Sincronizar el estado del autoguardado del controlador con el menú
+                    self.menu.selected_autosave_interval = self.autosave_interval
                     self.menu.saves = persistencia.obtener_partidas_usuario(self.menu.selected_user)
 
                 self.menu.draw()
@@ -236,11 +246,35 @@ class SimulationController:
                 current_time = pygame.time.get_ticks()
                 delta_time = current_time - self.last_update_time
 
+                # Comprobar si el icono de autoguardado debe desaparecer
+                if self.is_autosaving and self.autosave_icon_end_time and current_time >= self.autosave_icon_end_time:
+                    self.is_autosaving = False
+                    self.autosave_icon_end_time = None
+
                 if not self.paused and not sim_over and delta_time > self.base_time_per_hour / self.sim_speed_multiplier:
                     sim_over = self._avanzar_hora()
+<<<<<<< HEAD
+                    self.last_update_time = current_time                    
+
+                running, sim_over = self.handle_simulation_events(running, sim_over)
+=======
                     self.last_update_time = current_time
                     
                 running, sim_over = self.handle_simulation_events(running, sim_over) # type: ignore
+>>>>>>> 25b16c45563a269117e7427e6a67152c69787740
+
+                # --- Lógica de Autoguardado ---
+                if self.trigger_autosave:
+                    self.trigger_autosave = False # Reseteamos el trigger
+                    self.is_autosaving = True
+                    self.autosave_icon_end_time = pygame.time.get_ticks() + 3000 # 3 segundos
+                    
+                    # Forzamos el dibujado del icono ANTES de la operación de guardado que bloquea el programa
+                    self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier, self.is_autosaving)
+                    
+                    print(f"Autoguardando partida... (Intervalo: {self.autosave_interval} días)")
+                    self._action_save(autosave=True)
+                    self.days_since_last_autosave = 0 # Reiniciar contador
 
                 self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier, self.is_autosaving)
             
@@ -293,7 +327,8 @@ class SimulationController:
                         self.menu.saves = persistencia.obtener_partidas_usuario(command["user"])
 
                 elif command_type == "delete_save":
-                    success = persistencia.eliminar_partida(command["user"], command["save"])
+                    save_filename = command["save"]["filename"] # Extraer el nombre de archivo del diccionario
+                    success = persistencia.eliminar_partida(command["user"], save_filename)
                     if success:
                         # Actualizar la vista del menú para reflejar la eliminación
                         self.menu.selected_save = None
@@ -335,7 +370,7 @@ class SimulationController:
                         save_file = save_data # Ya es un string
                     self.current_user = user # Guardamos el usuario actual
                     self.save_path = os.path.join("saves", user, save_file) # type: ignore
-                    self.autosave_interval = command.get("autosave") # Obtener el intervalo de autoguardado                    
+                    self.autosave_interval = command.get("autosave") # Asegurarse de que el controlador usa el valor del menú al iniciar
                     
                     load_successful = self._action_load()
                     
