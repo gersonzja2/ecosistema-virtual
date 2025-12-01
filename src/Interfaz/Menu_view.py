@@ -103,7 +103,7 @@ class Menu:
                     return {"type": "delete_save", "user": self.selected_user, "save": self.selected_save}
                 elif name == "start_game" and self.selected_user and self.selected_save:
                     return {"type": "start_game", "user": self.selected_user, "save": self.selected_save, "autosave": self.selected_autosave_interval}
-                    elif name == "autosave":
+                elif name == "autosave":
                         self.current_autosave_index = (self.current_autosave_index + 1) % len(self.autosave_options)
                         self.selected_autosave_interval = self.autosave_options[self.current_autosave_index]
                         # Devolvemos un comando para que el controlador pueda estar al tanto si es necesario
