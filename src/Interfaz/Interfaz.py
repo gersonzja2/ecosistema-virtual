@@ -27,24 +27,7 @@ class PygameView:
         self.ultimo_cambio_agua = pygame.time.get_ticks()
         self.sounds = self._load_sounds()
 
-        self.music_playing = False
-        try:
-            music_folder = "assets"  # La música de fondo está en 'assets'
-            music_files = [f for f in os.listdir(music_folder) if f.endswith(".mp3")]
-            if music_files:
-                music_path = os.path.join(music_folder, random.choice(music_files))
-                pygame.mixer.music.load(music_path)
-                pygame.mixer.music.set_volume(0.15)
-                pygame.mixer.music.play(-1)
-                self.music_playing = True
-            else:
-                print(f"No se encontraron archivos .mp3 en la carpeta '{music_folder}'. La música no se reproducirá.")
-            # Iniciar sonido ambiental del río
-            if self.sounds.get("rio"):
-                self.sounds["rio"].set_volume(0.5) # Volumen más bajo para ser ambiental
-                self.sounds["rio"].play(-1) # Reproducir en bucle
-        except Exception as e:
-            print(f"No se pudo cargar o reproducir la música de fondo: {e}")
+        self.music_playing = False # La música de simulación no empieza hasta que se llama a start_simulation_music
         self.buttons = self._create_buttons()
         self.graph = PopulationGraph(SIM_WIDTH + 10, SCREEN_HEIGHT - 350, UI_WIDTH - 20, 120, self.font_small)
  
@@ -68,6 +51,27 @@ class PygameView:
         self.message_end_time = None
         self.message_color = COLOR_TEXT
         self.error_color = (255, 100, 100) # Un rojo claro para errores
+
+    def start_simulation_music(self):
+        """Carga y reproduce la música de fondo para la simulación."""
+        try:
+            music_folder = "assets"
+            # Excluimos la música del menú para que no suene en la simulación
+            music_files = [f for f in os.listdir(music_folder) if f.endswith(".mp3") and f != "Ciclo Sin Fin.mp3"]
+            if music_files:
+                music_path = os.path.join(music_folder, random.choice(music_files))
+                pygame.mixer.music.load(music_path)
+                pygame.mixer.music.set_volume(0.15)
+                pygame.mixer.music.play(-1)
+                self.music_playing = True
+            else:
+                print(f"No se encontraron archivos .mp3 en la carpeta '{music_folder}'. La música no se reproducirá.")
+            # Iniciar sonido ambiental del río
+            if self.sounds.get("rio"):
+                self.sounds["rio"].set_volume(0.5) # Volumen más bajo para ser ambiental
+                self.sounds["rio"].play(-1) # Reproducir en bucle
+        except Exception as e:
+            print(f"No se pudo cargar o reproducir la música de fondo de la simulación: {e}")
 
     def _load_sprites(self):
         sprites = {}

@@ -10,6 +10,7 @@ import src.Persistencia.Persistencia as persistencia # Importamos el nuevo módu
 class SimulationController:
     def __init__(self, dias_simulacion: int):
         pygame.init()  # Asegurar que pygame está inicializado
+        pygame.mixer.init() # Asegurar que el mixer está listo para la música del menú
         self.view = PygameView()
         self.ecosistema = Ecosistema()
         self.dias_simulacion = dias_simulacion
@@ -36,6 +37,16 @@ class SimulationController:
         self.base_time_per_hour = 50 # Ralentizamos un poco para mejor visualización
         self.last_update_time = pygame.time.get_ticks()
         self.clock = pygame.time.Clock()
+        self._play_menu_music()
+
+    def _play_menu_music(self):
+        """Carga y reproduce la música del menú."""
+        try:
+            pygame.mixer.music.load("assets/Ciclo Sin Fin.mp3")
+            pygame.mixer.music.set_volume(0.2) # Volumen moderado para el menú
+            pygame.mixer.music.play(-1)
+        except pygame.error as e:
+            print(f"No se pudo cargar la música del menú 'Ciclo Sin Fin.mp3': {e}")
 
     def _poblar_ecosistema(self):
         tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto]
@@ -427,6 +438,8 @@ class SimulationController:
                         # Si es una partida nueva, no hay nada que cargar, poblamos y empezamos.
                         print("Archivo de guardado no encontrado. Creando un nuevo mundo y poblándolo.")
                         self._poblar_ecosistema()
+                        pygame.mixer.music.stop() # Detenemos la música del menú
+                        self.view.start_simulation_music() # Iniciamos la música de la simulación
                         self.current_state = "SIMULATION"
                         self.paused = False # Empezar la simulación activa
                     else:
@@ -456,6 +469,7 @@ class SimulationController:
                 if event.type == pygame.QUIT:
                     running = False # Termina el bucle principal
                     break
+                self._play_menu_music() # Poner la música del menú al salir de la simulación
                 self.current_state = "MENU" # Volver al menú
             elif command_type == "toggle_music":
                 self.view.toggle_music()
@@ -538,7 +552,10 @@ class SimulationController:
                             # _action_load ya muestra el mensaje de error.
                             self.current_state = "MENU"
                             self.paused = True # Asegurarse de que el menú esté pausado
+                            self._play_menu_music() # Volver a poner la música del menú si la carga falla
                         else:
+                            pygame.mixer.music.stop() # Detenemos la música del menú
+                            self.view.start_simulation_music() # Iniciamos la música de la simulación
                             self.current_state = "SIMULATION"
                             self.paused = False # Iniciar la simulación activa
                         self.pending_load_info = None
