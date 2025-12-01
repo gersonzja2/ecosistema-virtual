@@ -13,10 +13,6 @@ class Ecosistema:
         self.tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto]
         self.animales: list[Animal] = []
         
-        # Carga y configuración de sonidos
-        self.sonido_rio = pygame.mixer.Sound("Sounds/rio 1.wav")
-        self.sonido_rio.set_volume(1.5)
-
         self.terreno = {
             "praderas": [
                 Terrenos.Pradera((50, 50, 250, 150)),      # Pradera en la esquina superior izquierda
@@ -110,11 +106,6 @@ class Ecosistema:
         self._poblar_decoraciones()
         self.terrain_cache = {"rio": {}, "selva": {}}
         self._precalcular_terrenos_cercanos()
-
-    def reproducir_sonido_rio(self):
-        """Reproduce el sonido del río en bucle"""
-        if self.sonido_rio:
-            self.sonido_rio.play(-1)  # -1 para hacer que suene en bucle
 
     def choca_con_terreno(self, x, y):
         radio_tronco = 5
@@ -370,11 +361,8 @@ class Ecosistema:
             
         nuevo_animal.ecosistema = self # Asignar referencia al ecosistema
         self.animales.append(nuevo_animal)
-                # Sonido de aparición
-        if hasattr(nuevo_animal, "reproducir_sonido"):
-            nuevo_animal.reproducir_sonido(1)
-
-
+        # Devolvemos el animal para que el controlador pueda gestionar efectos (como el sonido)
+        return nuevo_animal
     def activar_modo_caza_carnivoro(self, forzar_estado=None):
         if forzar_estado is not None:
             self.modo_caza_carnivoro_activo = forzar_estado
