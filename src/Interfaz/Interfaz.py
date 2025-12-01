@@ -25,6 +25,7 @@ class PygameView:
         self.agua_frame_actual = 0
         self.tiempo_animacion_agua = 500 # ms por frame de animación
         self.ultimo_cambio_agua = pygame.time.get_ticks()
+        self.sounds = self._load_sounds()
 
         self.music_playing = False
         try:
@@ -38,6 +39,10 @@ class PygameView:
                 self.music_playing = True
             else:
                 print(f"No se encontraron archivos .mp3 en la carpeta '{music_folder}'. La música no se reproducirá.")
+            # Iniciar sonido ambiental del río
+            if self.sounds.get("rio"):
+                self.sounds["rio"].set_volume(0.5) # Volumen más bajo para ser ambiental
+                self.sounds["rio"].play(-1) # Reproducir en bucle
         except Exception as e:
             print(f"No se pudo cargar o reproducir la música de fondo: {e}")
         self.buttons = self._create_buttons()
@@ -117,6 +122,21 @@ class PygameView:
             print("\n--- ADVERTENCIA GENERAL: No se encontró ningún archivo de sprite en la carpeta 'assets'. ---")
             print("La simulación usará círculos de colores para representar a los animales.")
         return sprites
+
+    def _load_sounds(self):
+        """Carga todos los efectos de sonido del juego."""
+        sounds = {}
+        sound_files = {
+            "rio": "Sounds/rio 1.wav",
+            "Conejo": "Sounds/conejo.wav",
+            # Añade aquí otros sonidos de animales
+        }
+        for name, path in sound_files.items():
+            try:
+                sounds[name] = pygame.mixer.Sound(path)
+            except (pygame.error, FileNotFoundError):
+                print(f"ADVERTENCIA: No se pudo cargar el sonido '{path}'.")
+        return sounds
 
     def _load_terrain_textures(self):
         textures = {}
@@ -600,6 +620,15 @@ class PygameView:
         self.current_message = message
         self.message_end_time = pygame.time.get_ticks() + duration_ms
         self.message_color = self.error_color if is_error else COLOR_TEXT
+
+    def play_animal_sound(self, animal_class_name):
+        """Reproduce el sonido de un animal si está cargado."""
+        sound = self.sounds.get(animal_class_name)
+        if sound:
+            sound.play()
+        else:
+            # Opcional: imprimir un aviso si el sonido no se encuentra
+            print(f"Debug: Sonido para '{animal_class_name}' no encontrado.")
 
     def close(self):
         try:

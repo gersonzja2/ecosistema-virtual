@@ -41,7 +41,8 @@ class SimulationController:
         tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto]
         for tipo in tipos_de_animales:
             for _ in range(2):
-                self.ecosistema.agregar_animal(tipo)
+                nuevo_animal = self.ecosistema.agregar_animal(tipo)
+                self.view.play_animal_sound(nuevo_animal.__class__.__name__)
 
     def _avanzar_dia(self):
         for _ in range(24):
@@ -99,7 +100,9 @@ class SimulationController:
 
         # Mapeo dinámico para los botones de "añadir animal"
         for name, cls in animal_map.items():
-            self.button_actions[f"add_{name}"] = lambda species=cls: self.ecosistema.agregar_animal(species)
+            # La acción ahora también reproduce el sonido a través de la vista
+            self.button_actions[f"add_{name}"] = lambda species=cls: \
+                self.view.play_animal_sound(self.ecosistema.agregar_animal(species).__class__.__name__)
 
     def _save_in_background(self, save_path, sim_speed, autosave_interval):
         """
