@@ -69,12 +69,6 @@ class Menu:
 
     def handle_mouse_click(self, event):
         """Procesa los clics del ratón en botones y listas."""
-        # Lógica para botones que están siempre visibles o se activan con estados (código original movido aquí)
-        if self.buttons["new_user"].collidepoint(event.pos):
-            self.input_active = True
-            self.input_text = ""
-            return None
-
         if self.buttons["start_game"] and self.buttons["start_game"].collidepoint(event.pos) and self.selected_user and self.selected_save:
             return {
                 "type": "start_game",
