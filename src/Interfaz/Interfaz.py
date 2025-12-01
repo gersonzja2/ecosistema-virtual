@@ -296,15 +296,10 @@ class PygameView:
             # Dibujar botón de reproducción si hay un animal seleccionado
             self.buttons["force_reproduce"].draw(self.screen)
         else:
-            # Recuentos para la UI
             herb_count = sum(1 for a in ecosistema.animales if isinstance(a, Herbivoro))
             carn_count = sum(1 for a in ecosistema.animales if isinstance(a, Carnivoro))
             omni_count = sum(1 for a in ecosistema.animales if isinstance(a, Omnivoro))
-            peces_totales = sum(len(r.peces) for r in ecosistema.terreno["rios"])
-            animales_totales = len(ecosistema.animales) + peces_totales
 
-            self._draw_text(f"Animales Totales: {animales_totales}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
-            y_offset += 20
             self._draw_text(f"Herbívoros: {herb_count}", self.font_normal, COLOR_HERBIVORO, self.screen, ui_x, y_offset)
             y_offset += 20
             self._draw_text(f"Carnívoros: {carn_count}", self.font_normal, COLOR_CARNIVORO, self.screen, ui_x, y_offset)
@@ -315,6 +310,7 @@ class PygameView:
             bayas_totales = sum(s.bayas for s in ecosistema.terreno["selvas"])
             self._draw_text(f"Bayas: {bayas_totales}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
             y_offset += 20
+            peces_totales = sum(len(r.peces) for r in ecosistema.terreno["rios"])
             self._draw_text(f"Peces: {peces_totales}", self.font_normal, COLOR_TEXT, self.screen, ui_x, y_offset)
             y_offset += 20
             speed_text = f"Velocidad: x{sim_speed}"
@@ -441,7 +437,7 @@ class PygameView:
                     # Fallback a un círculo si no hay sprite
                     pygame.draw.circle(self.screen, COLOR_PEZ, (pez.x, pez.y), 4)
 
-    def draw_simulation(self, ecosistema, sim_over, animal_seleccionado, pareja_seleccionada, sim_speed):
+    def draw_simulation(self, ecosistema, sim_over, animal_seleccionado, pareja_seleccionada, sim_speed, is_autosaving=False):
         self.screen.fill(COLOR_BACKGROUND)
         
         if self.needs_static_redraw:

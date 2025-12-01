@@ -22,6 +22,7 @@ class SimulationController:
         
         self.autosave_interval = None # Días entre autoguardados. None para desactivado.
         self.days_since_last_autosave = 0
+        self.is_autosaving = False # Flag para mostrar el icono
 
         self.animal_seleccionado = None
         self.pareja_seleccionada = None
@@ -64,9 +65,16 @@ class SimulationController:
             if self.autosave_interval is not None and self.autosave_interval > 0:
                 self.days_since_last_autosave += 1
                 if self.days_since_last_autosave >= self.autosave_interval:
-                    print(f"Autoguardando partida... (Intervalo: {self.autosave_interval} días)")
-                    self._action_save(autosave=True)
-                    self.days_since_last_autosave = 0
+                    self.is_autosaving = True
+                    # El icono de autoguardado se mostrará en el siguiente frame.
+                    # El guardado real se hará en el siguiente ciclo del bucle principal
+                    # para no interrumpir la simulación y permitir que la UI se actualice.
+                    # Forzamos un redibujado para que el icono aparezca.
+                    self.view.draw_simulation(self.ecosistema, False, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier)
+                    print(f"Autoguardando partida en el día {self.ecosistema.dia_total}... (Intervalo: {self.autosave_interval} días)")
+                    self._action_save(autosave=True) # Guardar
+                    self.days_since_last_autosave = 0 # Reiniciar contador después de guardar
+                    self.is_autosaving = False # Ocultar el icono después de guardar
         return self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales
 
     def _setup_button_actions(self):
@@ -232,9 +240,9 @@ class SimulationController:
                     sim_over = self._avanzar_hora()
                     self.last_update_time = current_time
                     
-                running, sim_over = self.handle_simulation_events(running, sim_over)
+                running, sim_over = self.handle_simulation_events(running, sim_over) # type: ignore
 
-                self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier)
+                self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier, self.is_autosaving)
             
             elif self.current_state == "SAVING":
                 self.view.draw_save_menu(self.save_menu_saves, self.save_menu_input, self.save_menu_selected) # Pasamos el save seleccionado
