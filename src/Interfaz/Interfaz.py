@@ -42,7 +42,7 @@ class PygameView:
             print(f"No se pudo cargar o reproducir la música de fondo: {e}")
         self.buttons = self._create_buttons()
         self.graph = PopulationGraph(SIM_WIDTH + 10, SCREEN_HEIGHT - 350, UI_WIDTH - 20, 120, self.font_small)
-
+ 
         try:
             self.autosave_icon = pygame.image.load("assets/icono_carga.png").convert_alpha()
             self.autosave_icon = pygame.transform.scale(self.autosave_icon, (40, 40))
@@ -50,7 +50,7 @@ class PygameView:
             print("Advertencia: No se pudo cargar 'assets/icono_carga.png'. El icono de autoguardado no se mostrará.")
             self.autosave_icon = None
         self.mouse_pos = None
-
+ 
         self.hierba_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         self.background_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT))
         self.needs_static_redraw = True
@@ -471,10 +471,10 @@ class PygameView:
             coord_text = f"({self.mouse_pos[0]}, {self.mouse_pos[1]})"
             self._draw_text(coord_text, self.font_small, COLOR_TEXT, self.screen, 10, SCREEN_HEIGHT - 45)
         
-        # Dibujar el icono de autoguardado al final para que esté por encima de todo.
+        # Dibujar el icono de autoguardado al final para que se superponga a todo
         if is_autosaving and self.autosave_icon:
             self.screen.blit(self.autosave_icon, (10, 10))
-
+ 
         pygame.display.flip()
 
     def draw_save_menu(self, save_slots, input_text, selected_save):
