@@ -19,10 +19,11 @@ class SimulationController:
         self.menu = Menu(self.view.screen, self.view.font_header, self.view.font_normal, self.view.font_small, users)
         
         self.current_state = "MENU" # Estados: "MENU", "SIMULATION", "SAVING"
+        self.pending_load_info = None # Almacena la información para la confirmación de carga
         self.save_path = None
         self.current_user = None
         
-        self.autosave_interval = None # Días entre autoguardados. None para desactivado.
+        self.autosave_interval = 30 # Días entre autoguardados. None para desactivado.
         self.is_autosaving = False # Flag para mostrar el icono
         self.trigger_autosave = False # Flag para iniciar el proceso de guardado en el bucle principal
         self.autosave_icon_end_time = None # Temporizador para la visibilidad del icono
@@ -247,6 +248,12 @@ class SimulationController:
             
             elif self.current_state == "SIMULATION":
                 current_time = pygame.time.get_ticks()
+                # Si se vuelve a la simulación desde el menú de guardado, reanudar si no estaba pausada antes.
+                # Esto evita que el juego se quede pausado al usar "Guardar como".
+                if self.view.needs_static_redraw: # Un indicador de que volvemos de otro estado
+                    if not hasattr(self, '_was_paused_before_saving') or not self._was_paused_before_saving:
+                        self.paused = False
+
                 delta_time = current_time - self.last_update_time
 
                 # Comprobar si el icono de autoguardado debe desaparecer
@@ -275,6 +282,11 @@ class SimulationController:
             elif self.current_state == "SAVING":
                 self.view.draw_save_menu(self.save_menu_saves, self.save_menu_input, self.save_menu_selected) # Pasamos el save seleccionado
                 running = self.handle_saving_events()
+
+            elif self.current_state == "CONFIRM_LOAD":
+                if self.pending_load_info:
+                    self.view.draw_load_confirmation(self.pending_load_info)
+                running = self.handle_load_confirmation_events()
     
         self.view.close()
 
@@ -365,20 +377,31 @@ class SimulationController:
                     # El comando puede devolver un string (para partidas nuevas) o un dict (para partidas existentes)
                     if isinstance(save_data, dict):
                         save_file = save_data.get("filename")
+                        is_new_game = False
                     else:
                         save_file = save_data # Ya es un string
+                        is_new_game = True
+
                     self.current_user = user # Guardamos el usuario actual
                     self.save_path = os.path.join("saves", user, save_file) # type: ignore
                     self.autosave_interval = command.get("autosave") # Obtener el intervalo del menú
                     
-                    load_successful = self._action_load()
-                    
-                    # Solo poblar si la carga falló (es decir, es una partida nueva)
-                    if not load_successful:
+                    if is_new_game or not os.path.exists(self.save_path):
+                        # Si es una partida nueva, no hay nada que cargar, poblamos y empezamos.
                         print("Archivo de guardado no encontrado. Creando un nuevo mundo y poblándolo.")
                         self._poblar_ecosistema()
+                        self.current_state = "SIMULATION"
+                        self.paused = False # Empezar la simulación activa
+                    else:
+                        # Si es una partida existente, preparamos la confirmación.
+                        self.pending_load_info = {
+                            "path": self.save_path,
+                            "date": persistencia.obtener_fecha_guardado(self.save_path),
+                            "population": persistencia.obtener_info_poblacion(self.save_path),
+                            "cycle": persistencia.obtener_ciclo_guardado(self.save_path)
+                        }
+                        self.current_state = "CONFIRM_LOAD"
 
-                    self.current_state = "SIMULATION"
         return True
     
     def handle_simulation_events(self, running, sim_over):
@@ -421,6 +444,7 @@ class SimulationController:
             
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
+                    self._was_paused_before_saving = self.paused
                     self.current_state = "SIMULATION" # Cancelar y volver a la simulación
                     return True
                 elif event.key == pygame.K_RETURN:
@@ -438,6 +462,7 @@ class SimulationController:
                     self.save_path = new_save_path # Actualizar la ruta de guardado actual
                     
                     # Volver a la simulación
+                    self._was_paused_before_saving = self.paused
                     self.current_state = "SIMULATION"
                     return True
                 elif event.key == pygame.K_BACKSPACE:
@@ -452,6 +477,33 @@ class SimulationController:
                     if rect.collidepoint(event.pos):
                         self.save_menu_selected = self.save_menu_saves[i].get("filename")
                         self.save_menu_input = "" # Limpiar el input al seleccionar
+        return True
+
+    def handle_load_confirmation_events(self):
+        """Maneja los eventos en la pantalla de confirmación de carga."""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return False
+            
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    # Cancelar la carga y volver al menú principal
+                    self.current_state = "MENU"
+                    self.pending_load_info = None
+                    return True
+                elif event.key == pygame.K_RETURN:
+                    # Confirmar la carga
+                    if self.pending_load_info:
+                        self.save_path = self.pending_load_info["path"]
+                        load_successful = self._action_load()
+                        if not load_successful:
+                            # Si por alguna razón falla, volvemos al menú
+                            self.current_state = "MENU"
+                        else:
+                            self.current_state = "SIMULATION"
+                            self.paused = False # Iniciar la simulación activa
+                        self.pending_load_info = None
+                    return True
         return True
 
 def main():

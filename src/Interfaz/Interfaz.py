@@ -521,6 +521,55 @@ class PygameView:
             rects.append(pygame.Rect(panel_x_start, save_y_start + i * 35, 460, 30))
         return rects
 
+    def draw_load_confirmation(self, load_info):
+        """Dibuja la pantalla de confirmación de carga."""
+        # Fondo semitransparente
+        overlay = pygame.Surface((self.screen.get_width(), self.screen.get_height()), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))
+        self.screen.blit(overlay, (0, 0))
+
+        # Contenedor del mensaje
+        box_width = 600
+        box_height = 400
+        box_x = (self.screen.get_width() - box_width) // 2
+        box_y = (self.screen.get_height() - box_height) // 2
+        box_rect = pygame.Rect(box_x, box_y, box_width, box_height)
+        
+        pygame.draw.rect(self.screen, (20, 30, 40), box_rect)
+        pygame.draw.rect(self.screen, (150, 150, 150), box_rect, 2)
+
+        # Título
+        title_text = self.font_header.render("Confirmar Carga", True, (255, 255, 0))
+        self.screen.blit(title_text, (box_x + (box_width - title_text.get_width()) // 2, box_y + 20))
+
+        # Advertencia
+        warning_text_1 = self.font_normal.render("¡Atención! Cargar esta partida", True, (255, 100, 100))
+        warning_text_2 = self.font_normal.render("reemplazará tu progreso actual.", True, (255, 100, 100))
+        self.screen.blit(warning_text_1, (box_x + (box_width - warning_text_1.get_width()) // 2, box_y + 80))
+        self.screen.blit(warning_text_2, (box_x + (box_width - warning_text_2.get_width()) // 2, box_y + 110))
+
+        # Información de la partida
+        info_y_start = box_y + 180
+        
+        date_str = f"Fecha de guardado: {load_info['date']}" if load_info.get('date') else "Fecha: Desconocida"
+        date_text = self.font_normal.render(date_str, True, (200, 200, 200))
+        self.screen.blit(date_text, (box_x + 40, info_y_start))
+
+        cycle_str = f"Día de la simulación: {load_info['cycle']}" if load_info.get('cycle') is not None else "Día: Desconocido"
+        cycle_text = self.font_normal.render(cycle_str, True, (200, 200, 200))
+        self.screen.blit(cycle_text, (box_x + 40, info_y_start + 30))
+
+        pop_str = f"Población total: {load_info['population']}" if load_info.get('population') is not None else "Población: Desconocida"
+        pop_text = self.font_normal.render(pop_str, True, (200, 200, 200))
+        self.screen.blit(pop_text, (box_x + 40, info_y_start + 60))
+
+        instructions_text_1 = self.font_normal.render("Pulsa [ENTER] para confirmar", True, (100, 255, 100))
+        instructions_text_2 = self.font_normal.render("Pulsa [ESC] para cancelar", True, (255, 255, 150))
+        self.screen.blit(instructions_text_1, (box_x + (box_width - instructions_text_1.get_width()) // 2, box_y + box_height - 70))
+        self.screen.blit(instructions_text_2, (box_x + (box_width - instructions_text_2.get_width()) // 2, box_y + box_height - 40))
+
+        pygame.display.flip()
+
     def close(self):
         try:
             if pygame.mixer.get_init():
