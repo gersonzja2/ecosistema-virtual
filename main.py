@@ -21,7 +21,6 @@ class SimulationController:
         self.current_user = None
         
         self.autosave_interval = None # Días entre autoguardados. None para desactivado.
-        self.days_since_last_autosave = 0
         self.is_autosaving = False # Flag para mostrar el icono
         self.trigger_autosave = False # Flag para iniciar el proceso de guardado en el bucle principal
         self.autosave_icon_end_time = None # Temporizador para la visibilidad del icono
@@ -58,16 +57,21 @@ class SimulationController:
         )
         self.view.graph.update(poblaciones)
 
+    def _check_autosave(self):
+        """Comprueba si debe activarse el autoguardado basado en el día actual."""
+        if self.autosave_interval is not None and self.autosave_interval > 0:
+            # Usamos el módulo para asegurarnos de que se active en los múltiplos exactos del intervalo.
+            # Se activa en el día 30, 60, 90... para un intervalo de 30.
+            if self.ecosistema.dia_total > 0 and self.ecosistema.dia_total % self.autosave_interval == 0:
+                self.trigger_autosave = True # Activamos el trigger para el bucle principal
+
     def _avanzar_hora(self):
         self.ecosistema.simular_hora()
         if self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales:
             return True
         if self.ecosistema.hora_actual == 0:
             self._actualizar_grafico()
-            if self.autosave_interval is not None and self.autosave_interval > 0:
-                self.days_since_last_autosave += 1
-                if self.days_since_last_autosave >= self.autosave_interval:
-                    self.trigger_autosave = True # Activamos el trigger para el bucle principal
+            self._check_autosave() # Comprobar si es día de autoguardado
         return self.ecosistema.dia_total >= self.dias_simulacion or not self.ecosistema.animales
 
     def _setup_button_actions(self):
@@ -105,12 +109,14 @@ class SimulationController:
         """Utiliza la clase Persistencia para cargar el estado del ecosistema.
         Devuelve True si la carga fue exitosa, False en caso contrario."""
         if self.save_path:
+            # Guardar el intervalo de autoguardado seleccionado antes de que se reinicie el ecosistema
+            autosave_setting = self.autosave_interval
             loaded_ecosystem = persistencia.cargar_partida(self.save_path)
             if loaded_ecosystem:
                 self.ecosistema = loaded_ecosystem
                 self.view.graph.history.clear()
+                self.autosave_interval = autosave_setting # Restaurar el intervalo
                 # Restaurar configuraciones de la simulación desde el ecosistema cargado
-                self.days_since_last_autosave = 0 # Reiniciar contador de autoguardado
                 self.ecosistema.activar_modo_caza_carnivoro(forzar_estado=self.ecosistema.modo_caza_carnivoro_activo)
                 # Actualizar el texto del botón de caza en la vista
                 if self.ecosistema.modo_caza_carnivoro_activo:
@@ -131,7 +137,6 @@ class SimulationController:
         self.view.graph.history.clear()
         self.animal_seleccionado = None
         self.pareja_seleccionada = None
-        self.days_since_last_autosave = 0 # Reiniciar contador de autoguardado
         self.view.needs_static_redraw = True
         self.paused = True
         # No es necesario reiniciar sim_over aquí, ya que se gestiona en el bucle principal.
@@ -249,12 +254,11 @@ class SimulationController:
                     self.is_autosaving = True
                     self.autosave_icon_end_time = pygame.time.get_ticks() + 3000 # 3 segundos
                     
-                    # Forzamos el dibujado del icono ANTES de la operación de guardado que bloquea el programa
+                    # Forzamos el dibujado del icono ANTES de la operación de guardado, que puede bloquear el programa.
                     self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier, self.is_autosaving)
                     
                     print(f"Autoguardando partida... (Intervalo: {self.autosave_interval} días)")
                     self._action_save(autosave=True)
-                    self.days_since_last_autosave = 0 # Reiniciar contador
 
                 self.view.draw_simulation(self.ecosistema, sim_over, self.animal_seleccionado, self.pareja_seleccionada, self.sim_speed_multiplier, self.is_autosaving)
             
@@ -336,6 +340,11 @@ class SimulationController:
                     self.menu.selected_save_population = population
                     self.menu.selected_save_cycle = cycle
 
+                elif command_type == "cycle_autosave":
+                    # This command is new, it will be handled by the menu to cycle through options
+                    # and the result will be sent with "start_game" or "set_autosave"
+                    pass # The logic is handled within Menu_view.py, controller just needs to acknowledge.
+
                 elif command_type == "set_autosave":
                     self.autosave_interval = command["interval"]
                     print(f"Intervalo de autoguardado establecido en: {self.autosave_interval} días.")
@@ -350,7 +359,7 @@ class SimulationController:
                         save_file = save_data # Ya es un string
                     self.current_user = user # Guardamos el usuario actual
                     self.save_path = os.path.join("saves", user, save_file) # type: ignore
-                    self.autosave_interval = command.get("autosave") # Asegurarse de que el controlador usa el valor del menú al iniciar
+                    self.autosave_interval = command.get("autosave") # Obtener el intervalo del menú
                     
                     load_successful = self._action_load()
                     
