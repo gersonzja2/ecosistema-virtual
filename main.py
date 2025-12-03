@@ -626,7 +626,7 @@ class SimulationController:
 def main():
     # Limpiar archivos temporales de sesiones anteriores antes de empezar
     persistencia.limpiar_archivos_temporales_antiguos()
-    controlador = SimulationController(dias_simulacion=200)
+    controlador = SimulationController(dias_simulacion=730)
     controlador.run()
     
 

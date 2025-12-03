@@ -15,11 +15,16 @@ class SoundBank:
     """
     Carga perezosa/cache de sonidos por especie.
     Busca en 'assets' y 'assets/Sonidos listos'.
+    También gestiona la frecuencia de reproducción para evitar la saturación.
     """
     _cache = {}
     _folders = ["assets", os.path.join("assets", "Sonidos listos"), os.path.join("assets", "Sounds"), "Sounds"]
 
-    # Índices para los tipos de sonido
+    # --- Control de frecuencia de sonido ---
+    _last_played = {}  # Almacena el último tick en que sonó un animal: { 'Conejo': 12345 }
+    MIN_INTERVAL = 5000  # Mínimo 5 segundos (en milisegundos) entre sonidos de la misma especie
+
+    # --- Tipos de sonido e identificadores ---
     APARECE, CAMINA, MUERE = 1, 2, 3
     _SOUND_INDICES = (APARECE, CAMINA, MUERE)
 
@@ -51,6 +56,10 @@ class SoundBank:
 
     @classmethod
     def get_for(cls, class_name):
+        """
+        Obtiene los sonidos cacheados para una clase de animal.
+        Este método solo recupera los sonidos, no los reproduce.
+        """
         if class_name not in cls._alias:
             return [None, None, None]
         key = cls._alias[class_name]
@@ -71,4 +80,27 @@ class SoundBank:
                         sounds[i-1] = None
         cls._cache[key] = sounds
         return sounds
+
+    @classmethod
+    def play(cls, class_name, sound_type):
+        """
+        Reproduce un tipo de sonido para una clase de animal, respetando el intervalo mínimo.
+        """
+        if not pygame.mixer.get_init():
+            return
+
+        sounds = cls.get_for(class_name)
+        if not sounds or sound_type - 1 >= len(sounds):
+            return
+
+        sound_to_play = sounds[sound_type - 1]
+
+        if sound_to_play:
+            current_time = pygame.time.get_ticks()
+            last_played_time = cls._last_played.get(class_name, 0)
+
+            # Comprueba si ha pasado suficiente tiempo desde la última vez
+            if current_time - last_played_time > cls.MIN_INTERVAL:
+                sound_to_play.play()
+                cls._last_played[class_name] = current_time
 # === END SOUNDBANK ===
