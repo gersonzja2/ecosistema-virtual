@@ -34,10 +34,17 @@ class SimulationController:
         self.paused = True
         
         self.sim_speed_multiplier = 3
+        self.special_sound_channel = None # Canal para sonidos especiales PUNTUALES (reproducción, etc.)
+        self.music_volume_before_fade = 0.2 # Almacena el volumen de la música antes de atenuarla
+
         self.base_time_per_hour = 50 # Ralentizamos un poco para mejor visualización
         self.last_update_time = pygame.time.get_ticks()
         self.clock = pygame.time.Clock()
         self._play_menu_music()
+        # Asegurarse de que el botón de música refleje el estado inicial
+        if "music" in self.view.buttons:
+            self.view.buttons["music"].text = "Música ON"
+        self._load_reproduction_sound()
 
     def _play_menu_music(self):
         """Carga y reproduce la música del menú."""
@@ -47,6 +54,15 @@ class SimulationController:
             pygame.mixer.music.play(-1)
         except pygame.error as e:
             print(f"No se pudo cargar la música del menú 'Ciclo Sin Fin.mp3': {e}")
+
+    def _load_reproduction_sound(self):
+        """Carga el sonido para el modo de reproducción."""
+        self.reproduction_sound = None
+        try:
+            self.reproduction_sound = pygame.mixer.Sound("assets/reproduccion_1.mp3")
+            self.reproduction_sound.set_volume(0.7) # Volumen más alto para destacar
+        except pygame.error as e:
+            print(f"No se pudo cargar el sonido de reproducción 'reproduccion_1.mp3': {e}")
 
     def _poblar_ecosistema(self):
         tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto]
@@ -160,12 +176,18 @@ class SimulationController:
                 if not hasattr(self.ecosistema, 'modo_caza_carnivoro_activo'):
                     self.ecosistema.modo_caza_carnivoro_activo = False
                 
-                self.ecosistema.activar_modo_caza_carnivoro(forzar_estado=self.ecosistema.modo_caza_carnivoro_activo)
-                # Actualizar el texto del botón de caza en la vista
+                # Restaurar el estado de caza y el sonido correspondiente.
                 if self.ecosistema.modo_caza_carnivoro_activo:
                     self.view.buttons["hunt"].text = "Regresar Carnívoros"
+                    # Al cargar, si el modo caza estaba activo, cambiamos la música a la de caza.
+                    pygame.mixer.music.load("assets/atacar_1.mp3")
+                    pygame.mixer.music.set_volume(0.25) # Volumen de caza
+                    pygame.mixer.music.play(-1)
                 else:
                     self.view.buttons["hunt"].text = "Cazar Herbívoros"
+                    # Al cargar, si el modo caza no está activo, iniciamos la música normal.
+                    self.view.start_simulation_music() # Asegura que se cargue la música correcta
+
                 self._setup_button_actions() # Volver a configurar las acciones con el nuevo ecosistema
                 self.view.needs_static_redraw = True
                 self._display_message(f"Partida '{os.path.basename(self.save_path)}' cargada con éxito.", is_error=False)
@@ -245,17 +267,41 @@ class SimulationController:
         self.ecosistema.activar_modo_caza_carnivoro()
         # Actualizar texto del botón
         if self.ecosistema.modo_caza_carnivoro_activo:
+            # Cambiar la música de fondo a la de caza
+            pygame.mixer.music.load("assets/atacar_1.mp3")
+            pygame.mixer.music.set_volume(0.25) # Volumen de caza
+            pygame.mixer.music.play(-1)
             self.view.buttons["hunt"].text = "Regresar Carnívoros"
         else:
+            # Restaurar la música de fondo normal de la simulación
+            self.view.start_simulation_music()
             self.view.buttons["hunt"].text = "Cazar Herbívoros"
+
+    def _play_special_sound_and_fade_music(self, sound, loops=0):
+        """Atenúa la música y reproduce un sonido especial. La restauración del volumen se maneja en el bucle principal."""
+        # Si ya hay un sonido especial sonando, no hacemos nada para evitar conflictos.
+        if self.special_sound_channel and self.special_sound_channel.get_busy(): # Usamos el canal para sonidos puntuales
+            return
+        
+        # Guardamos el volumen original de la música antes de atenuarla.
+        self.music_volume_before_fade = pygame.mixer.music.get_volume()
+        pygame.mixer.music.set_volume(self.music_volume_before_fade * 0.3)
+        
+        # Reproducimos el sonido y guardamos el canal para monitorearlo.
+        self.special_sound_channel = sound.play(loops=0) # Forzar a que no haya bucle para sonidos puntuales
+
+
 
     def _action_force_reproduce(self):
         if self.animal_seleccionado and self.pareja_seleccionada:
             # Asegurarse de que son de la misma especie antes de intentar la reproducción
             if type(self.animal_seleccionado) == type(self.pareja_seleccionada):
+                # Reproducimos el sonido una sola vez, sin bucle. La restauración se gestiona en el bucle principal.
+                self._play_special_sound_and_fade_music(self.reproduction_sound) # loops=0 es el valor por defecto
                 self.animal_seleccionado.buscar_pareja_para_reproducir(self.pareja_seleccionada)
+                # La restauración del volumen de la música se gestiona automáticamente en el bucle principal.
             else:
-                print(f"Error: {self.animal_seleccionado.nombre} y {self.pareja_seleccionada.nombre} no son de la misma especie y no pueden reproducirse.")
+                self._display_message(f"{self.animal_seleccionado.nombre} y {self.pareja_seleccionada.nombre} no son de la misma especie.", is_error=True)
 
     def _action_select_animal_at(self, pos):
         """Selecciona un animal en la posición dada o deselecciona si se hace clic en un espacio vacío."""
@@ -265,11 +311,19 @@ class SimulationController:
             # Si se hace clic en espacio vacío, se deselecciona todo.
             self.animal_seleccionado = None
             self.pareja_seleccionada = None
+            # Si se deselecciona todo, detener el sonido de reproducción si está sonando.
+            if self.special_sound_channel and self.special_sound_channel.get_sound() == self.reproduction_sound:
+                self.special_sound_channel.stop()
+
         elif not self.animal_seleccionado or self.animal_seleccionado == animal_clicado:
             # Seleccionar el animal principal (o deseleccionar la pareja si se vuelve a clicar)
             # Si se vuelve a hacer clic en el animal ya seleccionado, se deselecciona la pareja.
             self.animal_seleccionado = animal_clicado
             self.pareja_seleccionada = None
+            # Si se deselecciona la pareja, detener el sonido de reproducción si está sonando.
+            if self.special_sound_channel and self.special_sound_channel.get_sound() == self.reproduction_sound:
+                self.special_sound_channel.stop()
+
         else:
             # Si ya hay un animal seleccionado y se clica en otro diferente, se selecciona como pareja.
             self.pareja_seleccionada = animal_clicado
@@ -308,6 +362,13 @@ class SimulationController:
                 if self.is_autosaving and self.autosave_icon_end_time and current_time >= self.autosave_icon_end_time:
                     self.is_autosaving = False
                     self.autosave_icon_end_time = None
+                
+                # --- Lógica de restauración de volumen de música ---
+                if self.special_sound_channel and not self.special_sound_channel.get_busy():
+                    # Si el sonido especial ha terminado, restauramos el volumen de la música.
+                    if pygame.mixer.music.get_busy():
+                        pygame.mixer.music.set_volume(self.music_volume_before_fade)
+                    self.special_sound_channel = None # Limpiamos la referencia al canal.
 
                 if not self.paused and not sim_over and delta_time > self.base_time_per_hour / self.sim_speed_multiplier:
                     sim_over = self._avanzar_hora()

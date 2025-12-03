@@ -66,19 +66,22 @@ class PygameView:
         """Carga y reproduce la música de fondo para la simulación."""
         try:
             music_folder = "assets"
-            # Excluimos la música del menú para que no suene en la simulación
-            music_files = [f for f in os.listdir(music_folder) if f.endswith(".mp3") and f != "Ciclo Sin Fin.mp3"]
+            # Lista de archivos de sonido que NO son música de fondo
+            sound_effects = ["Ciclo Sin Fin.mp3", "reproduccion_1.mp3", "atacar_1.mp3"]
+            
+            # Seleccionamos solo los archivos .mp3 que NO están en la lista de efectos de sonido
+            music_files = [f for f in os.listdir(music_folder) if f.endswith(".mp3") and f not in sound_effects]
             if music_files:
                 music_path = os.path.join(music_folder, random.choice(music_files))
                 pygame.mixer.music.load(music_path)
-                pygame.mixer.music.set_volume(0.15)
+                pygame.mixer.music.set_volume(0.25)
                 pygame.mixer.music.play(-1)
                 self.music_playing = True
             else:
                 print(f"No se encontraron archivos .mp3 en la carpeta '{music_folder}'. La música no se reproducirá.")
             # Iniciar sonido ambiental del río
             if self.sounds.get("rio"):
-                self.sounds["rio"].set_volume(0.5) # Volumen más bajo para ser ambiental
+                self.sounds["rio"].set_volume(0.1) # Volumen más bajo para ser ambiental
                 self.sounds["rio"].play(-1) # Reproducir en bucle
         except Exception as e:
             print(f"No se pudo cargar o reproducir la música de fondo de la simulación: {e}")
