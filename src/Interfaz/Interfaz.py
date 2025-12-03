@@ -18,6 +18,7 @@ class PygameView:
         self.font_header = pygame.font.SysFont("helvetica", 24, bold=True)
         self.font_normal = pygame.font.SysFont("consola", 16)
         self.font_small = pygame.font.SysFont("consola", 14)
+        self.font_title = pygame.font.SysFont("helvetica", 72, bold=True) # Nueva fuente para el título (24 * 300% = 72)
         self.font_tiny = pygame.font.SysFont("consola", 12)
         self.sprites = self._load_sprites()
         self.terrain_textures = self._load_terrain_textures()
@@ -25,6 +26,13 @@ class PygameView:
         self.agua_frame_actual = 0
         self.tiempo_animacion_agua = 500 # ms por frame de animación
         self.ultimo_cambio_agua = pygame.time.get_ticks()
+
+        # Cargar la textura para el título animado
+        self.letras_texture = None
+        try:
+            self.letras_texture = pygame.image.load("assets/fondo_letras.png").convert()
+        except (pygame.error, FileNotFoundError):
+            print("ADVERTENCIA: No se pudo cargar 'assets/fondo_letras.png'. El título no tendrá textura.")
         self.sounds = self._load_sounds()
 
         self.music_playing = False # La música de simulación no empieza hasta que se llama a start_simulation_music
@@ -634,6 +642,28 @@ class PygameView:
         self.screen.blit(instructions_text_1, (box_x + (box_width - instructions_text_1.get_width()) // 2, box_y + box_height - 70))
         self.screen.blit(instructions_text_2, (box_x + (box_width - instructions_text_2.get_width()) // 2, box_y + box_height - 40))
 
+        pygame.display.flip()
+
+    def draw_transition_fade(self, alpha, fade_out=True):
+        """Dibuja un fundido a negro (fade) para la transición."""
+        if fade_out:
+            # Si es fade_out, el fondo es la última imagen del menú.
+            # Como no la guardamos, simplemente dibujamos el fondo del menú de nuevo.
+            # (Una optimización sería capturar la pantalla antes de la transición)
+            if self.ui_background_image: # Asumiendo que el menú usa una imagen similar
+                self.screen.blit(pygame.transform.scale(self.ui_background_image, (SCREEN_WIDTH, SCREEN_HEIGHT)), (0,0))
+            else:
+                self.screen.fill(COLOR_BACKGROUND)
+        else:
+            # Si es fade_in, el fondo es la primera imagen de la simulación.
+            # Dibujamos el fondo estático de la simulación.
+            self.screen.blit(self.background_surface, (0, 0))
+
+        # Dibujamos un rectángulo negro con transparencia variable (alpha)
+        fade_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        fade_surface.fill((0, 0, 0))
+        fade_surface.set_alpha(alpha)
+        self.screen.blit(fade_surface, (0, 0))
         pygame.display.flip()
 
     def display_message(self, message, duration_ms=3000, is_error=False):

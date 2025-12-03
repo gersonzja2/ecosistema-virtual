@@ -1,27 +1,41 @@
 import pygame
-from .Constantes import SIM_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH, COLOR_BACKGROUND, COLOR_TEXT, COLOR_BUTTON, COLOR_SELECTED, UI_WIDTH
+from .Constantes import *
+import os
 
 class Menu:
-    def __init__(self, screen, font_header, font_normal, font_small, users, saves_for_selected_user=None):
+    def __init__(self, screen, font_header, font_normal, font_small, users, font_title, letras_texture, saves_for_selected_user=None):
         self.screen = screen
-        self.font_header = font_header
+        self.font_title = font_title
+        self.font_header = font_header # Mantenemos la fuente header para otros títulos
         self.font_normal = font_normal
         self.font_small = font_small
         self.users = users
         self.saves = saves_for_selected_user or []
         self.selected_user = None
         self.selected_save = None
+        self.selected_save_date = None
         self.selected_save_population = None
         self.selected_save_cycle = None
-        self.selected_save_date = None
+
+        # Atributos para el título animado
+        self.letras_texture = letras_texture
+        self.texture_offset = 0
+        self.title_surface = None
+        self._create_title_surface()
+
+        # Atributos para el input de texto
         self.input_text = ""
-        self.input_active = False # Para la creación de usuarios # Este parece ser un remanente, lo mantenemos por si acaso pero no se usa en la lógica nueva.
         self.input_user_active = False
         self.input_save_active = False
-        self.autosave_options = [None, 10, 30, 50]  # None significa Desactivado
         self.rename_active = False
         self.rename_user_active = False
+
+        # Atributos de autoguardado
+        self.autosave_options = [None, 1, 5, 10, 30] # Días. None = Desactivado
         self.current_autosave_index = 0
+        self.selected_autosave_interval = self.autosave_options[self.current_autosave_index]
+
+        # Atributos de fondo
         self.scroll_x = 0
         self.background_image = None
         try:
@@ -63,7 +77,41 @@ class Menu:
         self.list_rects = {
             "users": [], "saves": []
         }
-        self.selected_autosave_interval = self.autosave_options[self.current_autosave_index]
+
+    def _create_title_surface(self):
+        """Crea la superficie del título que actuará como máscara."""
+        if not self.font_title: return
+        
+        # Renderizamos el texto en blanco sobre una superficie transparente.
+        # Esta será nuestra "máscara".
+        self.title_surface = self.font_title.render("Ecosistema Virtual", True, (255, 255, 255))
+
+    def _draw_animated_title(self):
+        """Dibuja el título con la textura animada."""
+        if not self.title_surface:
+            # Fallback a texto simple si no hay fuente o textura
+            title_surf = self.font_header.render("Ecosistema Virtual", True, COLOR_TEXT) # Mantenemos el font_header para el fallback
+            title_rect = title_surf.get_rect(center=(SIM_WIDTH // 2, 100)) # Centrado en el área de simulación
+            self.screen.blit(title_surf, title_rect)
+            return
+
+        # Posicionar el título estáticamente en el centro del área del menú
+        title_rect = self.title_surface.get_rect(center=(SIM_WIDTH // 2, 100))
+
+        if self.letras_texture:
+            # Creamos una superficie temporal del tamaño del título
+            temp_surf = pygame.Surface(self.title_surface.get_size(), pygame.SRCALPHA)
+            
+            # La textura interna sigue desplazándose para un efecto extra
+            self.texture_offset = (self.texture_offset + 0.25) % self.letras_texture.get_width()
+            temp_surf.blit(self.letras_texture, (-self.texture_offset, 0))
+            
+            # Usamos el texto como máscara sobre la textura
+            temp_surf.blit(self.title_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            self.screen.blit(temp_surf, title_rect) # Dibujar en la posición centrada
+        else:
+            # Si la textura no se cargó, dibujamos el título grande pero sin animación
+            self.screen.blit(self.title_surface, title_rect) # Dibujar en la posición centrada
 
     def handle_event(self, event):
         """Maneja los eventos de Pygame para el menú."""
@@ -198,9 +246,8 @@ class Menu:
             self.screen.fill(COLOR_BACKGROUND)
         
         # Título
-        title_surf = self.font_header.render("Simulador de Ecosistema", True, COLOR_TEXT)
-        self.screen.blit(title_surf, (SIM_WIDTH // 2 - title_surf.get_width() // 2, 200))
-        
+        self._draw_animated_title()
+
         # Panel derecho
         panel_rect = pygame.Rect(SIM_WIDTH, 0, UI_WIDTH, SCREEN_HEIGHT)
         if self.panel_background_image:

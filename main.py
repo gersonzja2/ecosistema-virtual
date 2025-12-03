@@ -17,9 +17,18 @@ class SimulationController:
         
         # El controlador ahora es responsable de obtener los datos para el menú
         users = persistencia.obtener_lista_usuarios()
-        self.menu = Menu(self.view.screen, self.view.font_header, self.view.font_normal, self.view.font_small, users)
+        self.menu = Menu(
+            screen=self.view.screen, 
+            font_header=self.view.font_header, 
+            font_normal=self.view.font_normal, 
+            font_small=self.view.font_small, 
+            users=users,
+            # Nuevos parámetros para el título animado
+            font_title=self.view.font_title,
+            letras_texture=self.view.letras_texture
+        )
         
-        self.current_state = "MENU" # Estados: "MENU", "SIMULATION", "SAVING"
+        self.current_state = "MENU" # Estados: "MENU", "SIMULATION", "SAVING", "TRANSITION_TO_GAME"
         self.pending_load_info = None # Almacena la información para la confirmación de carga
         self.save_path = None
         self.current_user = None
@@ -30,6 +39,12 @@ class SimulationController:
         self.autosave_icon_end_time = None # Temporizador para la visibilidad del icono
 
         self.animal_seleccionado = None
+
+        # Atributos para la transición
+        self.transition_alpha = 0
+        self.transition_duration = 750  # 0.75 segundos por fase
+        self.transition_phase = 'fade_out' # 'fade_out' o 'fade_in'
+
         self.pareja_seleccionada = None
         self.paused = True
         
@@ -397,6 +412,29 @@ class SimulationController:
                     self.view.draw_load_confirmation(self.pending_load_info)
                 running = self.handle_load_confirmation_events()
     
+            elif self.current_state == "TRANSITION_TO_GAME":
+                time_now = pygame.time.get_ticks()
+                elapsed = time_now - self.transition_start_time
+                
+                if self.transition_phase == 'fade_out':
+                    self.transition_alpha = min(255, int(255 * elapsed / self.transition_duration))
+                    self.view.draw_transition_fade(self.transition_alpha, fade_out=True)
+                    if self.transition_alpha == 255:
+                        # Cambiamos a la fase de "fade in"
+                        self.transition_phase = 'fade_in'
+                        self.transition_start_time = time_now
+                        # Detenemos la música del menú y preparamos la de la simulación
+                        pygame.mixer.music.stop()
+                        self.view.start_simulation_music()
+                
+                elif self.transition_phase == 'fade_in':
+                    self.transition_alpha = max(0, 255 - int(255 * elapsed / self.transition_duration))
+                    self.view.draw_transition_fade(self.transition_alpha, fade_out=False)
+                    if self.transition_alpha == 0:
+                        # Transición completada
+                        self.current_state = "SIMULATION"
+                        self.paused = False
+
         self.view.close()
 
     def handle_menu_events(self):
@@ -512,6 +550,10 @@ class SimulationController:
                             "cycle": persistencia.obtener_ciclo_guardado(self.save_path)
                         }
                         self.current_state = "CONFIRM_LOAD"
+                        # Preparamos el ecosistema para la transición, pero no lo mostramos aún
+                        if is_new_game:
+                            self.ecosistema = Ecosistema()
+                            self._poblar_ecosistema()
 
         return True
     
@@ -615,10 +657,10 @@ class SimulationController:
                             self.paused = True # Asegurarse de que el menú esté pausado
                             self._play_menu_music() # Volver a poner la música del menú si la carga falla
                         else:
-                            pygame.mixer.music.stop() # Detenemos la música del menú
-                            self.view.start_simulation_music() # Iniciamos la música de la simulación
-                            self.current_state = "SIMULATION"
-                            self.paused = False # Iniciar la simulación activa
+                            # Iniciar la transición en lugar de saltar directamente al juego
+                            self.current_state = "TRANSITION_TO_GAME"
+                            self.transition_start_time = pygame.time.get_ticks()
+                            self.transition_phase = 'fade_out'
                         self.pending_load_info = None
                     return True
         return True
