@@ -1,7 +1,7 @@
 import pygame
 import math
 import random
-from datetime import datetime
+from datetime import datetime 
 from .Terrenos.Terrenos import Rio, Selva, Pradera, Pez, Carcasa
 import src.Logica.Terrenos.Terrenos as Terrenos
 from .Animales.Animal import Animal, CELL_SIZE, SCREEN_HEIGHT, BORDE_MARGEN, SIM_WIDTH
@@ -9,6 +9,9 @@ from .Animales.animales import Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono
 
 
 class Ecosistema:
+    class Santuario(Terrenos.Pradera):
+        """Clase para definir zonas de santuario, hereda de Pradera para simplicidad."""
+        pass
     def __init__(self):
         self.tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto]
         self.animales: list[Animal] = []
@@ -25,7 +28,10 @@ class Ecosistema:
                 Terrenos.Selva((350, 500, 150, 100)),      # Pequeña selva en la parte inferior central
             ],
             "montanas": [],
-            "santuarios": [],
+            "santuarios": [
+                self.Santuario((550, 200, 150, 100)), # Santuario 1 (textura normal)
+            ],
+            "santuarios_especiales": [self.Santuario((550, 400, 150, 100))], # Santuario 2 (textura especial)
             "arboles": [],
             "plantas": [],
             "plantas_2": [],
@@ -71,6 +77,7 @@ class Ecosistema:
         terrain_hierarchy = [
             ("montanas", "montana"),
             ("santuarios", "santuario"),
+            ("santuarios_especiales", "santuario_1"), # Añadimos la nueva jerarquía
             ("selvas", "selva"),
             ("praderas", "pradera")
         ]
@@ -484,6 +491,7 @@ class Ecosistema:
         terrain_hierarchy = [
             ("montanas", "montana"),
             ("santuarios", "santuario"),
+            ("santuarios_especiales", "santuario_1"), # Añadimos la nueva jerarquía
             ("selvas", "selva"),
             ("praderas", "pradera")
         ]

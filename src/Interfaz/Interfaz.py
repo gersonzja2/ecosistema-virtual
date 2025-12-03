@@ -161,7 +161,8 @@ class PygameView:
             "fondo": "textura_fondo.png",
             "montana": "textura_montana.png",
             "santuario": "textura_santuario.png",
-            "selva": "textura_selva.png",
+            "santuario_1": "textura_santuario_1.png", # Añadimos la nueva textura
+            "selva": "textura_selva.png",            
             "pradera": "textura_pradera.png"
         }
         for name, filename in texture_files.items():
@@ -405,7 +406,7 @@ class PygameView:
 
         # 2. Dibuja cada área de terreno específica sobre el fondo.
         # El orden aquí importa: las selvas se dibujarán encima de las praderas si se superponen.
-        terrain_types_to_draw = ["praderas", "selvas", "santuarios", "montanas"]
+        terrain_types_to_draw = ["praderas", "selvas", "santuarios", "santuarios_especiales", "montanas"]
 
         for terrain_name in terrain_types_to_draw:
             texture = self.terrain_textures.get(terrain_name[:-1]) # "praderas" -> "pradera"
