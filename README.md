@@ -20,14 +20,10 @@ Este proyecto es una simulación de un ecosistema 2D desarrollada en Python util
   - Guarda y carga múltiples partidas por cada perfil.
 
 ## Actualizaciones Recientes 
-- **Mejoras Visuales**: Se optimizaron las texturas del entorno (praderas, santuarios) con un estilo *pixel art* para una mejor estética. También se mejoró la animación del agua y se implementaron nubes dinámicas, plantas y árboles.
-- **Sonido Inmersivo**: Se corrigieron y añadieron nuevos sonidos para los animales, mejorando la inmersión en el ecosistema.
-
-## Características Principales
-- **Visualización de Datos**: Un gráfico en tiempo real muestra la evolución de las poblaciones de herbívoros, carnívoros y omnívoros.
-- **Sistema de Guardado y Carga**:
-  - Crea perfiles de usuario.
-  - Guarda y carga múltiples partidas por cada perfil.
+- **Mejoras en Texturas y Entorno**: Se optimizaron las texturas de elementos como praderas y santuarios, adoptando un estilo *pixel art* que se alinea con la estética del juego.
+- **Animaciones y Elementos Visuales**: Se mejoró la animación del agua y se implementó la aparición dinámica de nubes, plantas y árboles para dar más vida al entorno.
+- **Apartado Estético**: Se realizaron mejoras continuas en el aspecto visual general del juego.
+- **Sonidos de la Fauna**: Se corrigieron los sonidos existentes de los animales y se implementaron nuevos para mejorar la inmersión.
 
 ## Tecnologías Utilizadas
 

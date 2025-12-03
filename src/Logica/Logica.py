@@ -1,6 +1,7 @@
 import pygame
 import math
 import random
+from datetime import datetime
 from .Terrenos.Terrenos import Rio, Selva, Pradera, Pez, Carcasa
 import src.Logica.Terrenos.Terrenos as Terrenos
 from .Animales.Animal import Animal, CELL_SIZE, SCREEN_HEIGHT, BORDE_MARGEN, SIM_WIDTH
@@ -12,10 +13,6 @@ class Ecosistema:
         self.tipos_de_animales = [Conejo, Raton, Cabra, Leopardo, Gato, Cerdo, Mono, Halcon, Insecto]
         self.animales: list[Animal] = []
         
-        # Carga y configuración de sonidos
-        self.sonido_rio = pygame.mixer.Sound("Sounds/rio 1.wav")
-        self.sonido_rio.set_volume(1.5)
-
         self.terreno = {
             "praderas": [
                 Terrenos.Pradera((50, 50, 250, 150)),      # Pradera en la esquina superior izquierda
@@ -109,11 +106,6 @@ class Ecosistema:
         self._poblar_decoraciones()
         self.terrain_cache = {"rio": {}, "selva": {}}
         self._precalcular_terrenos_cercanos()
-
-    def reproducir_sonido_rio(self):
-        """Reproduce el sonido del río en bucle"""
-        if self.sonido_rio:
-            self.sonido_rio.play(-1)  # -1 para hacer que suene en bucle
 
     def choca_con_terreno(self, x, y):
         radio_tronco = 5
@@ -369,13 +361,13 @@ class Ecosistema:
             
         nuevo_animal.ecosistema = self # Asignar referencia al ecosistema
         self.animales.append(nuevo_animal)
-                # Sonido de aparición
-        if hasattr(nuevo_animal, "reproducir_sonido"):
-            nuevo_animal.reproducir_sonido(1)
-
-
-    def activar_modo_caza_carnivoro(self):
-        self.modo_caza_carnivoro_activo = not self.modo_caza_carnivoro_activo
+        # Devolvemos el animal para que el controlador pueda gestionar efectos (como el sonido)
+        return nuevo_animal
+    def activar_modo_caza_carnivoro(self, forzar_estado=None):
+        if forzar_estado is not None:
+            self.modo_caza_carnivoro_activo = forzar_estado
+        else:
+            self.modo_caza_carnivoro_activo = not self.modo_caza_carnivoro_activo
         for animal in self.animales:
             if isinstance(animal, Carnivoro):
                 animal.modo_caza_activado = self.modo_caza_carnivoro_activo
@@ -404,11 +396,26 @@ class Ecosistema:
                         animal.estado = "regresando_a_zona"
                     animal.objetivo_comida = None # Cancela cualquier caza actual
 
-    def to_dict(self):
+    def to_dict(self, sim_speed_multiplier=None, autosave_interval=None):
         """Convierte el estado del ecosistema a un diccionario serializable."""
+        cantidad_plantas = (
+            len(self.terreno.get("arboles", [])) +
+            len(self.terreno.get("plantas", [])) +
+            len(self.terreno.get("plantas_2", []))
+        )
+        cantidad_peces = sum(len(r.peces) for r in self.terreno.get("rios", []))
+        cantidad_total_animales = len(self.animales) + cantidad_peces
         return {
+            "fecha_guardado": datetime.now().isoformat(),
             "dia_total": self.dia_total,
             "hora_actual": self.hora_actual,
+            "cantidad_animales": cantidad_total_animales,
+            "cantidad_plantas": cantidad_plantas,
+            "modo_caza_carnivoro_activo": self.modo_caza_carnivoro_activo,
+            "configuraciones": {
+                "sim_speed_multiplier": sim_speed_multiplier,
+                "autosave_interval": autosave_interval
+            },
             "grid_hierba": self.grid_hierba,
             "clima_actual": self.clima_actual,
             "selvas": [{"rect": list(s.rect), "bayas": s.bayas} for s in self.terreno["selvas"]],
@@ -439,6 +446,13 @@ class Ecosistema:
         ecosistema.hora_actual = data.get("hora_actual", 0)
         ecosistema.grid_hierba = data.get("grid_hierba", ecosistema.grid_hierba)
         ecosistema.clima_actual = data.get("clima_actual", ecosistema.clima_actual)
+        ecosistema.modo_caza_carnivoro_activo = data.get("modo_caza_carnivoro_activo", False)
+
+        # Cargar configuraciones
+        configuraciones = data.get("configuraciones", {})
+        # Devolvemos estos valores para que el controlador los pueda usar
+        sim_speed_multiplier = configuraciones.get("sim_speed_multiplier")
+        autosave_interval = configuraciones.get("autosave_interval")
 
         # Cargar terrenos
         for i, s_data in enumerate(data.get("selvas", [])):
@@ -508,4 +522,4 @@ class Ecosistema:
             carcasa.dias_descomposicion = c_data.get("dias", 0)
             ecosistema.recursos["carcasas"].append(carcasa)
 
-        return ecosistema
+        return ecosistema, sim_speed_multiplier, autosave_interval

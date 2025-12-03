@@ -1,237 +1,10 @@
 
 import pygame
 import random
+from src.Logica.Logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, SIM_WIDTH, SCREEN_HEIGHT
+from src.Interfaz.Constantes import *
+from .Componentes_ui import PopulationGraph, Button, Cloud
 import os
-import json
-from datetime import datetime
-from ..Logica.Logica import Ecosistema, Herbivoro, Carnivoro, Omnivoro, SIM_WIDTH, SCREEN_HEIGHT
-from .Constantes import *
-
-class PopulationGraph:
-    def __init__(self, x, y, width, height, font):
-        self.rect = pygame.Rect(x, y, width, height)
-        self.font = font
-        self.history = []
-        self.colors = {
-            "herb": (255, 255, 255),
-            "carn": (231, 76, 60),
-            "omni": (52, 152, 219)
-        }
-        self.labels = {
-            "herb": "Herbívoros",
-            "carn": "Carnívoros", 
-            "omni": "Omnívoros"
-        }
-
-    def update(self, populations):
-        self.history.append(populations)
-        if len(self.history) > self.rect.width:
-            self.history.pop(0)
-
-    def draw(self, surface):
-        pygame.draw.rect(surface, (40, 40, 40), self.rect)
-        title_surf = self.font.render("Población", True, (236, 240, 241))
-        surface.blit(title_surf, (self.rect.x + 5, self.rect.y + 5))
-
-        legend_y = self.rect.y + 20
-        for pop_type, label in self.labels.items():
-            label_surf = self.font.render(label, True, self.colors[pop_type])
-            surface.blit(label_surf, (self.rect.right - 80, legend_y))
-            legend_y += 15
-
-        if not self.history:
-            return
-
-        try:
-            max_pop = max((max(p) for p in self.history if p), default=1)
-        except ValueError:
-            max_pop = 1
-
-        for i, pop_type in enumerate(["herb", "carn", "omni"]):
-            points = []
-            for day, pops in enumerate(self.history):
-                x_pos = self.rect.x + day
-                y_pos = self.rect.bottom - int((pops[i] / max_pop) * (self.rect.height - 20))
-                points.append((x_pos, y_pos))
-            if len(points) > 1:
-                pygame.draw.lines(surface, self.colors[pop_type], False, points, 1)
-
-class Button:
-    def __init__(self, x, y, width, height, text, color, text_color):
-        self.rect = pygame.Rect(x, y, width, height)
-        self.text = text
-        self.color = color
-        self.text_color = text_color
-        self.font = pygame.font.SysFont("helvetica", 20)
-
-    def draw(self, surface):
-        pygame.draw.rect(surface, self.color, self.rect, border_radius=8)
-        text_surf = self.font.render(self.text, True, self.text_color)
-        text_rect = text_surf.get_rect(center=self.rect.center)
-        surface.blit(text_surf, text_rect)
-
-class Cloud:
-    """Representa una nube que se mueve por la pantalla."""
-    def __init__(self, image, screen_width, screen_height, y_range):
-        self.image = image
-        self.screen_width = screen_width
-        self.screen_height = screen_height
-        self.y_range = y_range
-        self.reset(on_screen=True) # Inicia en una posición aleatoria en pantalla
-
-    def reset(self, on_screen=False):
-        """Reinicia la posición y velocidad de la nube."""
-        self.speed = random.uniform(0.2, 0.8) # Velocidad lenta y variable
-        self.y = random.randint(self.y_range[0], self.y_range[1]) # Aparecen en el rango Y especificado
-        # Si on_screen es True, la posiciona en cualquier parte de la pantalla. Si no, a la izquierda.
-        if on_screen:
-            self.x = random.randint(0, self.screen_width)
-        else:
-            self.x = random.randint(-self.image.get_width() - 200, -self.image.get_width())
-
-    def update(self):
-        """Mueve la nube y la reinicia si sale de la pantalla."""
-        self.x += self.speed
-        if self.x > self.screen_width:
-            self.reset()
-
-class Menu:
-    def __init__(self, screen, font_header, font_normal, font_small, users, saves_for_selected_user=None):
-        self.screen = screen
-        self.font_header = font_header
-        self.font_normal = font_normal
-        self.font_small = font_small
-        self.users = users
-        self.saves = saves_for_selected_user or []
-        self.selected_user = None
-        self.selected_save = None
-        self.input_text = ""
-        self.input_active = False
-
-        self.buttons = {
-            "new_user": pygame.Rect(SIM_WIDTH + 50, 200, 300, 40),
-            "new_save": pygame.Rect(SIM_WIDTH + 50, 450, 300, 40),
-            "start_game": pygame.Rect(SIM_WIDTH + 50, 550, 300, 50)
-        }
-
-    def handle_event(self, event):
-        """Maneja los eventos de Pygame para el menú."""
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            # Lógica para seleccionar usuarios
-            user_y_start = 100
-            for i, user in enumerate(self.users or []):
-                user_rect = pygame.Rect(SIM_WIDTH + 50, user_y_start + i * 30, 300, 30)
-                if user_rect.collidepoint(event.pos):
-                    self.selected_user = user
-                    self.selected_save = None
-                    # Devuelve una solicitud para que el controlador cargue las partidas de este usuario
-                    return {"type": "select_user", "username": user}
-
-            # Lógica para seleccionar partidas
-            save_y_start = 300
-            for i, save_data in enumerate(self.saves or []):
-                save_rect = pygame.Rect(SIM_WIDTH + 50, save_y_start + i * 45, 300, 40)
-                if save_rect.collidepoint(event.pos):
-                    self.selected_save = save_data["filename"]
-                    return None
-
-            # Lógica para botones
-            if self.buttons["new_user"].collidepoint(event.pos):
-                self.input_active = True
-                self.input_text = ""
-                return None
-            
-            if self.buttons["new_save"].collidepoint(event.pos) and self.selected_user:
-                # Crear una nueva partida (se guardará al salir de la simulación)
-                num_saves = len(self.saves)
-                new_save_name = f"partida_{num_saves + 1}.json"
-                self.selected_save = new_save_name # Seleccionamos el nuevo nombre
-                # Devolvemos la información para que el controlador decida qué hacer
-                return {"type": "start_game", "user": self.selected_user, "save": self.selected_save}
-
-            if self.buttons["start_game"].collidepoint(event.pos) and self.selected_user and self.selected_save:
-                return {"type": "start_game", "user": self.selected_user, "save": self.selected_save}
-
-        if event.type == pygame.KEYDOWN and self.input_active:
-            if event.key == pygame.K_RETURN:
-                if self.input_text:
-                    username = self.input_text
-                    self.input_active = False
-                    self.input_text = ""
-                    return {"type": "create_user", "username": username}
-            elif event.key == pygame.K_BACKSPACE:
-                self.input_text = self.input_text[:-1]
-            else:
-                self.input_text += event.unicode
-        
-        return None
-
-    def draw(self):
-        """Dibuja el menú completo en la pantalla."""
-        self.screen.fill(COLOR_BACKGROUND)
-        
-        # Título
-        title_surf = self.font_header.render("Simulador de Ecosistema", True, COLOR_TEXT)
-        self.screen.blit(title_surf, (SIM_WIDTH // 2 - title_surf.get_width() // 2, 200))
-        
-        # Panel derecho
-        pygame.draw.rect(self.screen, (40, 40, 40), (SIM_WIDTH, 0, UI_WIDTH, SCREEN_HEIGHT))
-        
-        # Sección de Usuarios
-        self.screen.blit(self.font_header.render("Usuarios", True, COLOR_TEXT), (SIM_WIDTH + 20, 50))
-        user_y_start = 100
-        for i, user in enumerate(self.users or []):
-            color = COLOR_SELECTED if user == self.selected_user else COLOR_TEXT
-            user_surf = self.font_normal.render(user, True, color)
-            self.screen.blit(user_surf, (SIM_WIDTH + 50, user_y_start + i * 30))
-
-        # Botón/Input para nuevo usuario
-        pygame.draw.rect(self.screen, COLOR_BUTTON, self.buttons["new_user"])
-        if self.input_active:
-            input_surf = self.font_normal.render(self.input_text + "|", True, COLOR_TEXT)
-        else:
-            input_surf = self.font_normal.render("Crear Nuevo Usuario", True, COLOR_TEXT)
-        self.screen.blit(input_surf, (self.buttons["new_user"].x + 10, self.buttons["new_user"].y + 10))
-
-        # Sección de Partidas
-        if self.selected_user:
-            self.screen.blit(self.font_header.render(f"Partidas de {self.selected_user}", True, COLOR_TEXT), (SIM_WIDTH + 20, 250))
-            save_y_start = 300
-            for i, save_data in enumerate(self.saves or []):
-                filename = save_data["filename"]
-                metadata = save_data["metadata"]
-                
-                color = COLOR_SELECTED if filename == self.selected_save else COLOR_TEXT
-                save_name = filename.replace(".json", "").replace("_", " ").capitalize()
-                save_surf = self.font_normal.render(save_name, True, color)
-                self.screen.blit(save_surf, (SIM_WIDTH + 50, save_y_start + i * 45))
-
-                if metadata:
-                    try:
-                        fecha_guardado = datetime.fromisoformat(metadata['save_date']).strftime('%d/%m/%Y %H:%M')
-                        meta_text = f"  Día {metadata['in_game_day']} | {metadata['animal_count']} animales | {fecha_guardado}"
-                        meta_surf = self.font_small.render(meta_text, True, (180, 180, 180))
-                        self.screen.blit(meta_surf, (SIM_WIDTH + 55, save_y_start + i * 45 + 20))
-                    except (KeyError, ValueError):
-                        pass # No mostrar metadatos si son inválidos o no existen
-            
-            # Botón para nueva partida
-            pygame.draw.rect(self.screen, COLOR_BUTTON, self.buttons["new_save"])
-            new_save_surf = self.font_normal.render("Nueva Partida", True, COLOR_TEXT)
-            self.screen.blit(new_save_surf, (self.buttons["new_save"].x + 10, self.buttons["new_save"].y + 10))
-
-        # Botón para Iniciar
-        if self.selected_user and self.selected_save:
-            pygame.draw.rect(self.screen, (0, 150, 0), self.buttons["start_game"])
-            # La vista ya no sabe si el archivo existe. El controlador se encargará de eso.
-            # Simplificamos el texto o asumimos que el controlador manejará la lógica de carga/creación.
-            start_text = "Empezar / Cargar"
-            if not self.selected_save.startswith("partida_"): # Heurística simple
-                start_text = "Cargar Partida"
-            start_surf = self.font_header.render(start_text, True, COLOR_TEXT)
-            self.screen.blit(start_surf, (self.buttons["start_game"].centerx - start_surf.get_width() // 2, self.buttons["start_game"].centery - start_surf.get_height() // 2))
-
-        pygame.display.flip()
 
 class PygameView:
     def __init__(self):
@@ -252,31 +25,66 @@ class PygameView:
         self.agua_frame_actual = 0
         self.tiempo_animacion_agua = 500 # ms por frame de animación
         self.ultimo_cambio_agua = pygame.time.get_ticks()
+        self.sounds = self._load_sounds()
 
-        self.music_playing = False
-        try:
-            music_folder = "assets"  # La música de fondo está en 'assets'
-            music_files = [f for f in os.listdir(music_folder) if f.endswith(".mp3")]
-            if music_files:
-                music_path = os.path.join(music_folder, random.choice(music_files))
-                pygame.mixer.music.load(music_path)
-                pygame.mixer.music.set_volume(0.15)
-                pygame.mixer.music.play(-1)
-                self.music_playing = True
-            else:
-                print(f"No se encontraron archivos .mp3 en la carpeta '{music_folder}'. La música no se reproducirá.")
-        except Exception as e:
-            print(f"No se pudo cargar o reproducir la música de fondo: {e}")
+        self.music_playing = False # La música de simulación no empieza hasta que se llama a start_simulation_music
         self.buttons = self._create_buttons()
         self.graph = PopulationGraph(SIM_WIDTH + 10, SCREEN_HEIGHT - 350, UI_WIDTH - 20, 120, self.font_small)
+ 
+        try:
+            self.autosave_icon = pygame.image.load("assets/icono_carga.png").convert_alpha()
+            self.autosave_icon = pygame.transform.scale(self.autosave_icon, (50, 50))
+        except (pygame.error, FileNotFoundError):
+            print("Advertencia: No se pudo cargar 'assets/icono_carga.png'. El icono de autoguardado no se mostrará.")
+            self.autosave_icon = None
         self.mouse_pos = None
-
+ 
         self.hierba_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         self.background_surface = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT))
         self.needs_static_redraw = True
         self.top_clouds = self._create_clouds(y_range=(5, SCREEN_HEIGHT // 3), count=10)
         self.middle_clouds = self._create_clouds(y_range=(SCREEN_HEIGHT // 3 + 10, SCREEN_HEIGHT // 2 - 70), count=5)
         self.bottom_clouds = self._create_clouds(y_range=(SCREEN_HEIGHT // 2 + 60, SCREEN_HEIGHT - 70), count=8)
+
+        # Atributos para mensajes temporales
+        self.current_message = None
+        self.message_end_time = None
+        self.message_color = COLOR_TEXT
+        self.error_color = (255, 100, 100) # Un rojo claro para errores
+
+        self.ui_background_image = None
+        try:
+            # Cargar la imagen de fondo para el panel de la UI de simulación
+            ui_image_original = pygame.image.load("assets/fondo_menu_2.png").convert()
+            # Escalar la imagen para que coincida con el tamaño del panel
+            self.ui_background_image = pygame.transform.scale(ui_image_original, (UI_WIDTH, SCREEN_HEIGHT))
+        except (pygame.error, FileNotFoundError):
+            print("Advertencia: No se pudo cargar la imagen 'fondo_menu_2.png' para el panel UI. Se usará un color sólido.")
+            self.ui_background_image = None
+
+    def start_simulation_music(self):
+        """Carga y reproduce la música de fondo para la simulación."""
+        try:
+            music_folder = "assets"
+            # Lista de archivos de sonido que NO son música de fondo
+            sound_effects = ["Ciclo Sin Fin.mp3", "reproduccion_1.mp3", "atacar_1.mp3"]
+            
+            # Seleccionamos solo los archivos .mp3 que NO están en la lista de efectos de sonido
+            music_files = [f for f in os.listdir(music_folder) if f.endswith(".mp3") and f not in sound_effects]
+            if music_files:
+                music_path = os.path.join(music_folder, random.choice(music_files))
+                pygame.mixer.music.load(music_path)
+                pygame.mixer.music.set_volume(0.25)
+                pygame.mixer.music.play(-1)
+                self.music_playing = True
+            else:
+                print(f"No se encontraron archivos .mp3 en la carpeta '{music_folder}'. La música no se reproducirá.")
+            # Iniciar sonido ambiental del río
+            if self.sounds.get("rio"):
+                self.sounds["rio"].set_volume(0.1) # Volumen más bajo para ser ambiental
+                self.sounds["rio"].play(-1) # Reproducir en bucle
+        except Exception as e:
+            print(f"No se pudo cargar o reproducir la música de fondo de la simulación: {e}")
 
     def _load_sprites(self):
         sprites = {}
@@ -331,6 +139,21 @@ class PygameView:
             print("\n--- ADVERTENCIA GENERAL: No se encontró ningún archivo de sprite en la carpeta 'assets'. ---")
             print("La simulación usará círculos de colores para representar a los animales.")
         return sprites
+
+    def _load_sounds(self):
+        """Carga todos los efectos de sonido del juego."""
+        sounds = {}
+        sound_files = {
+            "rio": "Sounds/rio 1.wav",
+            "Conejo": "Sounds/conejo.wav",
+            # Añade aquí otros sonidos de animales
+        }
+        for name, path in sound_files.items():
+            try:
+                sounds[name] = pygame.mixer.Sound(path)
+            except (pygame.error, FileNotFoundError):
+                print(f"ADVERTENCIA: No se pudo cargar el sonido '{path}'.")
+        return sounds
 
     def _load_terrain_textures(self):
         textures = {}
@@ -390,11 +213,22 @@ class PygameView:
         buttons["add_insecto"] = Button(col3_x, SCREEN_HEIGHT - 95, btn_width, btn_height, "Añadir Insecto", COLOR_HERBIVORO, (0,0,0))
         
         btn_width_small, btn_height_small = 90, 30
-        buttons["save"] = Button(SIM_WIDTH + 10, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Guardar", (0, 100, 0), COLOR_TEXT)
-        buttons["load"] = Button(SIM_WIDTH + 10 + btn_width_small + spacing, SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Cargar", (100, 100, 0), COLOR_TEXT)
-        buttons["restart"] = Button(SIM_WIDTH + 10 + 2 * (btn_width_small + spacing), SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, "Reiniciar", (200, 50, 50), COLOR_TEXT)
+        
+        # --- Posicionamiento dinámico de botones inferiores para una alineación perfecta ---
+        current_x = SIM_WIDTH + 10
+        y_pos = SCREEN_HEIGHT - 40
+
+        # Botón "Guardar como..."
+        save_as_width = btn_width_small + 30 # Ancho personalizado
+        buttons["save_as"] = Button(current_x, y_pos, save_as_width, btn_height_small, "Guardar como...", (0, 100, 100), COLOR_TEXT)
+        current_x += save_as_width + spacing
+
+        # Botones restantes
+        buttons["restart"] = Button(current_x, y_pos, btn_width_small, btn_height_small, "Reiniciar", (200, 50, 50), COLOR_TEXT)
+        current_x += btn_width_small + spacing
+
         music_text = "Música: ON" if getattr(self, 'music_playing', False) else "Música: OFF"
-        buttons["music"] = Button(SIM_WIDTH + 10 + 3 * (btn_width_small + spacing), SCREEN_HEIGHT - 40, btn_width_small, btn_height_small, music_text, (80, 80, 80), COLOR_TEXT)
+        buttons["music"] = Button(current_x, y_pos, btn_width_small, btn_height_small, music_text, (80, 80, 80), COLOR_TEXT)
 
         # Botones contextuales (se dibujarán por separado)
         buttons["force_reproduce"] = Button(SIM_WIDTH + 15, 200, 180, 30, "Forzar Reproducción", (142, 68, 173), COLOR_TEXT)
@@ -486,7 +320,10 @@ class PygameView:
     def _draw_ui(self, ecosistema, animal_seleccionado, pareja_seleccionada, sim_speed):
         ui_x = SIM_WIDTH + 10
         ui_rect = pygame.Rect(SIM_WIDTH, 0, UI_WIDTH, SCREEN_HEIGHT)
-        pygame.draw.rect(self.screen, COLOR_BACKGROUND, ui_rect)
+        if self.ui_background_image:
+            self.screen.blit(self.ui_background_image, (SIM_WIDTH, 0))
+        else:
+            pygame.draw.rect(self.screen, COLOR_BACKGROUND, ui_rect)
 
         hora_str = str(ecosistema.hora_actual).zfill(2)
         self._draw_text(f"DÍA: {ecosistema.dia_total} - {hora_str}:00", self.font_header, COLOR_TEXT, self.screen, ui_x, 5)
@@ -653,7 +490,7 @@ class PygameView:
                     # Fallback a un círculo si no hay sprite
                     pygame.draw.circle(self.screen, COLOR_PEZ, (pez.x, pez.y), 4)
 
-    def draw_simulation(self, ecosistema, sim_over, animal_seleccionado, pareja_seleccionada, sim_speed):
+    def draw_simulation(self, ecosistema, sim_over, animal_seleccionado, pareja_seleccionada, sim_speed, is_autosaving=False):
         self.screen.fill(COLOR_BACKGROUND)
         
         if self.needs_static_redraw:
@@ -676,7 +513,142 @@ class PygameView:
             coord_text = f"({self.mouse_pos[0]}, {self.mouse_pos[1]})"
             self._draw_text(coord_text, self.font_small, COLOR_TEXT, self.screen, 10, SCREEN_HEIGHT - 45)
         
+        # Dibujar el icono de autoguardado al final para que se superponga a todo
+        if is_autosaving and self.autosave_icon:
+            self.screen.blit(self.autosave_icon, (10, 10))
+ 
+        # Dibujar mensaje temporal si está activo
+        if self.current_message and pygame.time.get_ticks() < self.message_end_time:
+            # Fondo semitransparente para el mensaje para mejorar la legibilidad
+            text_surf = self.font_normal.render(self.current_message, True, self.message_color)
+            text_rect = text_surf.get_rect()
+            
+            # Crear un rectángulo de fondo un poco más grande que el texto
+            bg_rect = text_rect.inflate(20, 20)
+            bg_rect.center = (SIM_WIDTH // 2, SCREEN_HEIGHT // 2)
+            text_rect.center = bg_rect.center
+
+            # Dibujar el fondo y luego el texto
+            bg_surf = pygame.Surface(bg_rect.size, pygame.SRCALPHA)
+            bg_surf.fill((20, 30, 40, 200)) # Color oscuro semitransparente
+            self.screen.blit(bg_surf, bg_rect)
+            self.screen.blit(text_surf, text_rect)
+        else:
+            self.current_message = None
+
         pygame.display.flip()
+
+    def draw_save_menu(self, save_slots, input_text, selected_save):
+        """Dibuja un menú superpuesto para 'Guardar como...'."""
+        # Dibuja un rectángulo semitransparente sobre el área de simulación
+        overlay = pygame.Surface((SIM_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))
+        self.screen.blit(overlay, (0, 0))
+
+        # Panel de guardado
+        panel_rect = pygame.Rect(150, 150, 500, 400)
+        pygame.draw.rect(self.screen, (30, 30, 30), panel_rect, border_radius=15)
+        pygame.draw.rect(self.screen, COLOR_SELECTED, panel_rect, width=2, border_radius=15)
+
+        # Título
+        title_surf = self.font_header.render("Guardar Partida Como...", True, COLOR_TEXT)
+        self.screen.blit(title_surf, (panel_rect.x + 20, panel_rect.y + 20))
+
+        # Campo de texto para nuevo nombre
+        input_rect = pygame.Rect(panel_rect.x + 20, panel_rect.y + 70, panel_rect.width - 40, 40)
+        pygame.draw.rect(self.screen, (50, 50, 50), input_rect)
+        input_surf = self.font_normal.render(input_text + "|", True, COLOR_TEXT)
+        self.screen.blit(input_surf, (input_rect.x + 10, input_rect.y + 10))
+
+        # Lista de partidas existentes para sobrescribir
+        save_slot_rects = self.get_save_slot_rects(save_slots)
+        self._draw_text("O selecciona una para sobrescribir:", self.font_small, COLOR_TEXT, self.screen, panel_rect.x + 20, panel_rect.y + 130)
+        for i, save_rect in enumerate(save_slot_rects):
+            save = save_slots[i]
+            filename = save.get("filename", "")
+            color = COLOR_SELECTED if filename == selected_save else COLOR_TEXT
+            save_name = filename.replace(".json", "").replace("_", " ").capitalize()
+            save_surf = self.font_normal.render(save_name, True, color)
+            self.screen.blit(save_surf, save_rect)
+
+        # Instrucciones
+        self._draw_text("Presiona ENTER para guardar.", self.font_small, COLOR_TEXT, self.screen, panel_rect.x + 20, panel_rect.bottom - 50)
+        self._draw_text("Presiona ESC para cancelar.", self.font_small, COLOR_TEXT, self.screen, panel_rect.x + 20, panel_rect.bottom - 30)
+
+        pygame.display.flip()
+
+    def get_save_slot_rects(self, save_slots):
+        """Calcula y devuelve los rectángulos para cada slot de guardado en el menú 'Guardar como...'."""
+        rects = []
+        panel_x_start = 150 + 20
+        save_y_start = 150 + 160
+        for i, _ in enumerate(save_slots):
+            rects.append(pygame.Rect(panel_x_start, save_y_start + i * 35, 460, 30))
+        return rects
+
+    def draw_load_confirmation(self, load_info):
+        """Dibuja la pantalla de confirmación de carga."""
+        # Fondo semitransparente
+        overlay = pygame.Surface((self.screen.get_width(), self.screen.get_height()), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))
+        self.screen.blit(overlay, (0, 0))
+
+        # Contenedor del mensaje
+        box_width = 600
+        box_height = 400
+        box_x = (self.screen.get_width() - box_width) // 2
+        box_y = (self.screen.get_height() - box_height) // 2
+        box_rect = pygame.Rect(box_x, box_y, box_width, box_height)
+        
+        pygame.draw.rect(self.screen, (20, 30, 40), box_rect)
+        pygame.draw.rect(self.screen, (150, 150, 150), box_rect, 2)
+
+        # Título
+        title_text = self.font_header.render("Confirmar Carga", True, (255, 255, 0))
+        self.screen.blit(title_text, (box_x + (box_width - title_text.get_width()) // 2, box_y + 20))
+
+        # Advertencia
+        warning_text_1 = self.font_normal.render("¡Atención! Cargar esta partida", True, (255, 100, 100))
+        warning_text_2 = self.font_normal.render("reemplazará tu progreso actual.", True, (255, 100, 100))
+        self.screen.blit(warning_text_1, (box_x + (box_width - warning_text_1.get_width()) // 2, box_y + 80))
+        self.screen.blit(warning_text_2, (box_x + (box_width - warning_text_2.get_width()) // 2, box_y + 110))
+
+        # Información de la partida
+        info_y_start = box_y + 180
+        
+        date_str = f"Fecha de guardado: {load_info['date']}" if load_info.get('date') else "Fecha: Desconocida"
+        date_text = self.font_normal.render(date_str, True, (200, 200, 200))
+        self.screen.blit(date_text, (box_x + 40, info_y_start))
+
+        cycle_str = f"Día de la simulación: {load_info['cycle']}" if load_info.get('cycle') is not None else "Día: Desconocido"
+        cycle_text = self.font_normal.render(cycle_str, True, (200, 200, 200))
+        self.screen.blit(cycle_text, (box_x + 40, info_y_start + 30))
+
+        pop_str = f"Población total: {load_info['population']}" if load_info.get('population') is not None else "Población: Desconocida"
+        pop_text = self.font_normal.render(pop_str, True, (200, 200, 200))
+        self.screen.blit(pop_text, (box_x + 40, info_y_start + 60))
+
+        instructions_text_1 = self.font_normal.render("Pulsa [ENTER] para confirmar", True, (100, 255, 100))
+        instructions_text_2 = self.font_normal.render("Pulsa [ESC] para cancelar", True, (255, 255, 150))
+        self.screen.blit(instructions_text_1, (box_x + (box_width - instructions_text_1.get_width()) // 2, box_y + box_height - 70))
+        self.screen.blit(instructions_text_2, (box_x + (box_width - instructions_text_2.get_width()) // 2, box_y + box_height - 40))
+
+        pygame.display.flip()
+
+    def display_message(self, message, duration_ms=3000, is_error=False):
+        """Prepara un mensaje para ser mostrado en pantalla por un tiempo determinado."""
+        self.current_message = message
+        self.message_end_time = pygame.time.get_ticks() + duration_ms
+        self.message_color = self.error_color if is_error else COLOR_TEXT
+
+    def play_animal_sound(self, animal_class_name):
+        """Reproduce el sonido de un animal si está cargado."""
+        sound = self.sounds.get(animal_class_name)
+        if sound:
+            sound.play()
+        else:
+            # Opcional: imprimir un aviso si el sonido no se encuentra
+            print(f"Debug: Sonido para '{animal_class_name}' no encontrado.")
 
     def close(self):
         try:

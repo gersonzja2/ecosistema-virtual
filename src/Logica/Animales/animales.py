@@ -28,6 +28,12 @@ class Insecto(Herbivoro):
         if max_energia is None:
             max_energia = max(30, min(50, 40 + random.randint(-5, 5)))
         super().__init__(nombre, x, y, edad, energia, max_energia)
+        # Cargar el sonido del grillo
+        self.sonido_grillo = pygame.mixer.Sound("Sounds/grillo 1.wav")
+        self.sonidos = [self.sonido_grillo, self.sonido_grillo, self.sonido_grillo] # 1:aparece, 2:camina, 3:muere
+
+    # No es necesario sobreescribir reproducir_sonido, usamos el de la clase Animal base
+    # que ya funciona con la lista self.sonidos.
 
 class Leopardo(Carnivoro):
     def __init__(self, nombre: str, x: int, y: int, edad: int = 0, energia: int = 100, max_energia=None):
